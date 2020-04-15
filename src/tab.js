@@ -9,9 +9,10 @@ function Tab({tab, idx, activeTab, setTab, deleteTab, saveTitle}) {
     active += ' tab-active'
   }
 
-  function updateTitle() {
+  function updateTitle(e) {
+    e.preventDefault()
     const placeholder = title || ''
-    const newTitle = prompt('Enter new title', placeholder)
+    const newTitle = prompt('Enter new title', placeholder) || title
     setTitle(newTitle)
     saveTitle(newTitle)
   }
@@ -40,7 +41,7 @@ function Tab({tab, idx, activeTab, setTab, deleteTab, saveTitle}) {
   }
 
   return (
-    <span className={'tab' + active} onClick={tabClick} onDoubleClick={updateTitle}>
+    <span className={'tab' + active} onClick={tabClick} onContextMenu={updateTitle}>
       <label id={idx}>
         {title}
       </label>

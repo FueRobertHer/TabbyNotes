@@ -58,6 +58,7 @@ function App() {
     const newTabs = [...state.tabs]
     newTabs.push(newTab)
     updateTabs(newTabs)
+    return newTabs.length - 1
   }
 
   return (
