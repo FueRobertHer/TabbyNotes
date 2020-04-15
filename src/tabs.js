@@ -4,11 +4,10 @@ import Tab from './tab'
 
 function Tabs({tabs, updateTabs, addNewTab, activeTab, setActiveTab}) {
   
-  let currentTab = tabs[activeTab]
-  const [tabTitle, setTabTitle] = useState(tabs[activeTab].title)
+  const [, setTabTitle] = useState(tabs[activeTab].title)
   const [tabText, setTabText] = useState(tabs[activeTab].text)
 
-  function saveText(str) {
+  function saveText(str = tabs[activeTab.text]) {
     const tab = tabs[activeTab]
     const newTab = Object.assign(tab, {text: str})
     tabs[activeTab] = newTab
@@ -21,8 +20,7 @@ function Tabs({tabs, updateTabs, addNewTab, activeTab, setActiveTab}) {
     saveText(text)
   }
 
-
-  function saveTitle(str) {
+  function saveTitle(str = tabs[activeTab.title]) {
     setTabTitle(str)
     const tab = tabs[activeTab]
     const newTab = Object.assign(tab, {title: str})
@@ -51,11 +49,6 @@ function Tabs({tabs, updateTabs, addNewTab, activeTab, setActiveTab}) {
     }
     const newTabState = [...tabs]
     newTabState.splice(idx, 1)
-    let newIdx = activeTab
-    if (activeTab >= newTabState.length) {
-      newIdx = newTabState.length - 1
-    }
-    // setTab(newIdx)
     updateTabs(newTabState)
   }
 
@@ -70,7 +63,6 @@ function Tabs({tabs, updateTabs, addNewTab, activeTab, setActiveTab}) {
             setTab={setTab}
             deleteTab={deleteTab}
             saveTitle={saveTitle}
-            clearTab={clearTab}
           />
         )
       })

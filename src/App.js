@@ -16,13 +16,18 @@ document.addEventListener('keydown', (e) => {
 })
 
 function App() {
-  const test = {
-    title: 'hello',
-    text: 'world'
+  const empty = {
+    tabs: [
+      {
+        title: 'untilted',
+        text: ''
+      }
+    ], 
+    activeTab: 0
   }
 
   let saveState = JSON.parse(window.localStorage.getItem('saveState'))
-  if (!saveState) saveState = {tabs: [{title: 'untitled', text: ''}], activeTab: 0}
+  if (!saveState) saveState = empty
 
   const [state, setState] = useState(saveState)
   const [tabsState, setTabsState] = useState([...state.tabs])
@@ -30,6 +35,7 @@ function App() {
 
 
   function updateState(obj) {
+    console.log('update')
     const newState = Object.assign(state, obj)
     setState(newState)
 
@@ -40,6 +46,11 @@ function App() {
     const newTabState = [...tabState]
     setTabsState(newTabState)
     updateState({tabs: newTabState})
+  }
+
+  function updateActiveTab(tab) {
+    setActiveTab(tab)
+    updateState({activeTab: tab})
   }
 
   function addNewTab() {
@@ -55,7 +66,7 @@ function App() {
       updateTabs={updateTabs}
       addNewTab={addNewTab}
       activeTab={activeTab}
-      setActiveTab={setActiveTab}
+      setActiveTab={updateActiveTab}
     />
   );
 }

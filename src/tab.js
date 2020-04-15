@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-function Tab({tab, idx, activeTab, setTab, deleteTab, saveTitle, clearTab}) {
+function Tab({tab, idx, activeTab, setTab, deleteTab, saveTitle}) {
   
   const [title, setTitle] = useState(tab.title)
 
