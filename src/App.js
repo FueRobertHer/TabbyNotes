@@ -35,10 +35,8 @@ function App() {
 
 
   function updateState(obj) {
-    console.log('update')
     const newState = Object.assign(state, obj)
     setState(newState)
-
     window.localStorage.setItem('saveState', JSON.stringify(state))
   }
 
