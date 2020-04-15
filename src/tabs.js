@@ -2,11 +2,9 @@ import React, { useState } from 'react';
 
 import Tab from './tab'
 
-function Tabs({tabs, updateTabs, addNewTab}) {
+function Tabs({tabs, updateTabs, addNewTab, activeTab, setActiveTab}) {
   
-  const [activeTab, setActiveTab] = useState(0)
   let currentTab = tabs[activeTab]
-  console.log(activeTab, currentTab)
   const [tabTitle, setTabTitle] = useState(tabs[activeTab].title)
   const [tabText, setTabText] = useState(tabs[activeTab].text)
 
@@ -38,7 +36,6 @@ function Tabs({tabs, updateTabs, addNewTab}) {
   }
 
   function setTab(idx) {
-    console.log(idx)
     setActiveTab(idx)
     const newTitle = tabs[idx].title
     const newText = tabs[idx].text
@@ -58,7 +55,7 @@ function Tabs({tabs, updateTabs, addNewTab}) {
     if (activeTab >= newTabState.length) {
       newIdx = newTabState.length - 1
     }
-    setTab(newIdx)
+    // setTab(newIdx)
     updateTabs(newTabState)
   }
 

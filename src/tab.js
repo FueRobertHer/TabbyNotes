@@ -16,10 +16,12 @@ function Tab({tab, idx, activeTab, setTab, deleteTab, saveTitle, clearTab}) {
     saveTitle(newTitle)
   }
 
-  function tabClick() {
-    setTab(idx)
-    setTitle(tab.title)
-    document.getElementById('text').focus()
+  function tabClick(e) {
+    if(e.target.className !== 'delete') {
+      setTab(idx)
+      setTitle(tab.title)
+      document.getElementById('text').focus()
+    }
   }
 
   function deleteSelf() {

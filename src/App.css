@@ -30,6 +30,7 @@ html {
   margin-left: 2px;
   padding: 2px;
   width: 20px;
+  height: 10px;
   overflow: hidden;
   background-color: white;
   filter: brightness(90%);
@@ -45,6 +46,7 @@ html {
 
 .tab-active {
   width: fit-content;
+  height: fit-content;
   padding: 2px 2px 2px 10px;
   font-size: small;
   font-weight: bold;
@@ -55,6 +57,7 @@ html {
 
 .new-tab {
   width: 20px;
+  height: 10px;
   font-size: small;
   justify-content: center;
 }

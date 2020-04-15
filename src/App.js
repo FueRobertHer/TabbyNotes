@@ -22,24 +22,22 @@ function App() {
   }
 
   let saveState = JSON.parse(window.localStorage.getItem('saveState'))
-  if (!saveState) saveState = {tabs: [{title: 'untitled', text: ''}]}
-
-  const loadState = {tabs: [test]}
+  if (!saveState) saveState = {tabs: [{title: 'untitled', text: ''}], activeTab: 0}
 
   const [state, setState] = useState(saveState)
   const [tabsState, setTabsState] = useState([...state.tabs])
+  const [activeTab, setActiveTab] = useState(state.activeTab)
+
 
   function updateState(obj) {
     const newState = Object.assign(state, obj)
     setState(newState)
-    console.log('state', newState)
 
     window.localStorage.setItem('saveState', JSON.stringify(state))
   }
 
   function updateTabs(tabState) {
     const newTabState = [...tabState]
-    console.log('tabs', newTabState)
     setTabsState(newTabState)
     updateState({tabs: newTabState})
   }
@@ -56,6 +54,8 @@ function App() {
       tabs={tabsState} 
       updateTabs={updateTabs}
       addNewTab={addNewTab}
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
     />
   );
 }
