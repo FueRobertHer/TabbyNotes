@@ -78,7 +78,7 @@ function Tabs({tabs, updateTabs, addNewTab, activeTab, setActiveTab}) {
         <button className='tab new-tab' onClick={addNewTab}>+</button>
       </nav>
       <div className='body'>
-        <textarea id='text' onChange={onChangeText} wrap='soft' value={tabText}></textarea>
+        <textarea id='text' onChange={onChangeText} wrap='soft' value={tabs[activeTab].text}></textarea>
       </div>
 
       <footer className="credit">

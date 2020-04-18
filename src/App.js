@@ -19,7 +19,7 @@ function App() {
   const empty = {
     tabs: [
       {
-        title: 1,
+        title: 'new',
         text: ''
       }
     ], 
