@@ -29,7 +29,7 @@ function Tabs({tabs, updateTabs, addNewTab, activeTab, setActiveTab}) {
   }
 
   function clearTab() {
-    saveTitle('untitled')
+    saveTitle('new')
     saveText('')
   }
 
@@ -57,6 +57,7 @@ function Tabs({tabs, updateTabs, addNewTab, activeTab, setActiveTab}) {
       tabs.map((tab,idx) => {
         return (
           <Tab 
+            key={'tab-' + idx}
             tab={tab} 
             idx={idx} 
             activeTab={activeTab}
@@ -76,12 +77,12 @@ function Tabs({tabs, updateTabs, addNewTab, activeTab, setActiveTab}) {
 
         <button className='tab new-tab' onClick={addNewTab}>+</button>
       </nav>
-      <body className='body'>
-        <textarea id='text' onChange={onChangeText} wrap='soft'>{tabText}</textarea>
-      </body>
+      <div className='body'>
+        <textarea id='text' onChange={onChangeText} wrap='soft' value={tabText}></textarea>
+      </div>
 
       <footer className="credit">
-        Made with love by <a href="https://github.com/FueRobertHer" target="_blank">Fue Her</a>
+        Made with love by <a href="https://github.com/FueRobertHer" rel='noopener noreferrer' target="_blank">Fue Her</a>
       </footer>
     </div>
   )

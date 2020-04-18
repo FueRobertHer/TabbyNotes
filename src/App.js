@@ -19,7 +19,7 @@ function App() {
   const empty = {
     tabs: [
       {
-        title: 'untilted',
+        title: 1,
         text: ''
       }
     ], 
@@ -52,7 +52,7 @@ function App() {
   }
 
   function addNewTab() {
-    const newTab = {title: 'untitled', text: ''}
+    const newTab = {title: 'new', text: ''}
     const newTabs = [...state.tabs]
     newTabs.push(newTab)
     updateTabs(newTabs)

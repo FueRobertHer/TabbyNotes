@@ -43,7 +43,7 @@ html {
 }
 
 .tab:hover {
-
+  filter: brightness(100%);
 }
 
 .tab-active {
@@ -58,7 +58,7 @@ html {
 }
 
 .new-tab {
-  width: 20px;
+  min-width: 20px;
   height: 24px;
   font-size: small;
   justify-content: center;
@@ -96,9 +96,9 @@ html {
 
 .body {
   height: 100%;
-  width: 95%;
+  width: 98%;
   margin-top: -6px;
-  margin-left: 14px;
+  margin-left: 15px;
   background-color: white;
   border: 1px solid #ccc;
 }
