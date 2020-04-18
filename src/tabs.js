@@ -5,7 +5,7 @@ import Tab from './tab'
 function Tabs({tabs, updateTabs, addNewTab, activeTab, setActiveTab}) {
   
   const [, setTabTitle] = useState(tabs[activeTab].title)
-  const [tabText, setTabText] = useState(tabs[activeTab].text)
+  const [, setTabText] = useState(tabs[activeTab].text)
 
   function saveText(str = tabs[activeTab.text]) {
     const tab = tabs[activeTab]
