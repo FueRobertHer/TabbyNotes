@@ -2,15 +2,15 @@
   "manifest_version": 2,
   "name": "TabbyNotes",
   "description": "Notes taking extention with tabs using local storage",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "browser_action": {
     "default_popup": "index.html",
     "default_title": "Open to take notes"
   },
   "icons": {
-    "16": "logo-small.png",
-    "48": "logo-small.png",
-    "128": "logo-small.png"
+    "16": "kitty.png",
+    "48": "kitty.png",
+    "128": "kitty.png"
   },
   "content_security_policy": "script-src 'self' 'sha256-rkTb15qUZNrKoaKNKjLcVI0tnem580klo1J1DbTsPBg='; object-src 'self'",
   "permissions": []
