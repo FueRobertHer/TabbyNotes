@@ -10,6 +10,7 @@ function Tab({tab, idx, activeTab, setTab, deleteTab, saveTitle}) {
   }
 
   function updateTitle(e) {
+    if (idx !== activeTab) return
     e.preventDefault()
     const placeholder = tab.title || ''
     const newTitle = prompt('Enter new title', placeholder) || title
