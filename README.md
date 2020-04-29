@@ -1,6 +1,6 @@
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
-"Icon made by Pixel perfect from www.flaticon.com"
+"Icon made by Freepik from www.flaticon.com"
 
 ## Available Scripts
 
