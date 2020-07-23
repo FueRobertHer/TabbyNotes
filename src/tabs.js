@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 
 import Tab from './tab'
 
@@ -6,6 +6,7 @@ function Tabs({tabs, updateTabs, addNewTab, activeTab, setActiveTab}) {
   
   const [, setTabTitle] = useState(tabs[activeTab].title)
   const [, setTabText] = useState(tabs[activeTab].text)
+  const navRef = useRef(null)
 
   function saveText(str = tabs[activeTab.text]) {
     const tab = tabs[activeTab]
@@ -70,9 +71,20 @@ function Tabs({tabs, updateTabs, addNewTab, activeTab, setActiveTab}) {
     )
   }
 
+  function onWheel(e) {
+    e.preventDefault();
+    let scrollPosition = navRef.current.scrollLeft;
+    if (e.deltaX === 0) {
+      navRef.current.scrollTo({
+        top: 0,
+        left: scrollPosition + e.deltaY
+      })
+    }
+  }
+
   return (
     <div className = "App" >
-      <nav className='nav'>
+      <nav className='nav' ref={navRef} onWheel={onWheel}>
         {showTabs()}
 
         <button className='tab new-tab' onClick={addNewTab}>+</button>
