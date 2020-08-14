@@ -1,50 +1,87 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { useStateContext } from './StateContextProvider';
 
-function Tab({tab, idx, activeTab, setTab, deleteTab, saveTitle}) {
-  
-  const [title, setTitle] = useState(tab.title)
+const Tab = ({idx}) => {
+  const {state, dispatch} = useStateContext();
 
   let active = ''
-  if (activeTab === idx) {
+  if (state.activeTab === idx) {
     active += ' tab-active'
   }
 
-  function updateTitle(e) {
-    if (idx !== activeTab) return
-    e.preventDefault()
-    const placeholder = tab.title || ''
-    const newTitle = prompt('Enter new title', placeholder) || title
-    setTitle(newTitle)
-    saveTitle(newTitle)
+  const updateTitle = (e) => {
+    e.preventDefault();
+    const newTitle = window.prompt(`The previous title is "${state.tabs[idx].title}". Enter a new title`);
+    if (!newTitle || newTitle.length === 0) return;
+    dispatch({
+      type: "UPDATE",
+      payload: {
+        tabIdx: idx,
+        title: newTitle
+      }
+    })
   }
 
-  function tabClick(e) {
-    if(e.target.className !== 'delete') {
-      setTab(idx)
-      setTitle(tab.title)
-      document.getElementById('text').focus()
+  const openTab = (e) => {
+    if (e.target.className === "delete") return;
+    dispatch({
+      type: "CHANGE_TAB",
+      payload: {
+        tabIdx: idx
+      }
+    })
+  }
+
+  const nextTab = () => {
+    if (state.activeTab !== idx) return idx;
+    if (idx === 0) return 0;
+    return idx - 1;
+  }
+
+  const deleteTab = () => {
+    const next = nextTab()
+    dispatch({
+      type: "DELETE_TAB",
+      payload: {
+        tabIdx: idx,
+        activeTab: next
+      }
+    })
+  }
+
+  const clear = () => {
+    dispatch({
+      type: "UPDATE",
+      payload: {
+        tabIdx: idx,
+        text: '',
+        title: "new"
+      }
+    })
+  }
+
+  const deleteOrClear = () => {
+    if (state.tabs.length === 1 && idx === 0) {
+      clear();
+    } else {
+      deleteTab();
     }
   }
 
-  function deleteSelf() {
-    let newIdx = idx - 1
-    if (newIdx < 0) newIdx = 0
-    setTab(newIdx)
-    deleteTab(idx)
-  }
-
-  function deleteBtn() {
-    if (activeTab === idx) {
-      return(
-        <span className='delete' onClick={deleteSelf}>✖</span>
-      )
+  const deleteBtn = () => {
+    if (state.activeTab === idx) {
+      return <span className='delete' onClick={deleteOrClear}>✖</span>
     }
   }
 
   return (
-    <span className={'tab' + active} onClick={tabClick} onContextMenu={updateTitle}>
+    <span 
+      className={'tab' + active} 
+      onClick={openTab} 
+      onContextMenu={updateTitle}
+    >
       <label id={idx}>
-        {tab.title}
+        {state.tabs[idx].title}
       </label>
 
       {deleteBtn()}

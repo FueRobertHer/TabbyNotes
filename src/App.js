@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-
+import React from 'react';
+import StateContextProvider from './StateContextProvider';
 import Tabs from './tabs'
 
 import './App.css';
@@ -16,57 +16,13 @@ document.addEventListener('keydown', (e) => {
 })
 
 function App() {
-  const empty = {
-    tabs: [
-      {
-        title: 'new',
-        text: ''
-      }
-    ], 
-    activeTab: 0
-  }
-
-  let saveState = JSON.parse(window.localStorage.getItem('saveState'))
-  if (!saveState) saveState = empty
-
-  const [state, setState] = useState(saveState)
-  const [tabsState, setTabsState] = useState([...state.tabs])
-  const [activeTab, setActiveTab] = useState(state.activeTab)
-
-
-  function updateState(obj) {
-    const newState = Object.assign(state, obj)
-    setState(newState)
-    window.localStorage.setItem('saveState', JSON.stringify(state))
-  }
-
-  function updateTabs(tabState) {
-    const newTabState = [...tabState]
-    setTabsState(newTabState)
-    updateState({tabs: newTabState})
-  }
-
-  function updateActiveTab(tab) {
-    setActiveTab(tab)
-    updateState({activeTab: tab})
-  }
-
-  function addNewTab() {
-    const newTab = {title: 'new', text: ''}
-    const newTabs = [...state.tabs]
-    newTabs.push(newTab)
-    updateTabs(newTabs)
-    return newTabs.length - 1
-  }
 
   return (
-    <Tabs 
-      tabs={tabsState} 
-      updateTabs={updateTabs}
-      addNewTab={addNewTab}
-      activeTab={activeTab}
-      setActiveTab={updateActiveTab}
-    />
+    <StateContextProvider>
+      <div className="App">
+        <Tabs />
+      </div>
+    </StateContextProvider>
   );
 }
 
