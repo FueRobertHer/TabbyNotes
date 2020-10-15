@@ -10,8 +10,8 @@ html {
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  width: 300px;
-  height: 500px;
+  width: 35vw;
+  height: 80vh;
 }
 
 .nav {
@@ -47,7 +47,6 @@ html {
   justify-content: space-between;
   align-items: center;
   padding: 0px 4px;
-  min-width: 10px;
   width: 20px;
   height: 100%;
   border: 1px solid rgb(185, 233, 255);
@@ -112,7 +111,7 @@ html {
 .body {
   height: 91%;
   width: 100%;
-  margin-top: -5px;
+  margin-top: -20px;
   margin-left: 0px;
   background-color: white;
   border: 1px solid rgb(185, 233, 255);
