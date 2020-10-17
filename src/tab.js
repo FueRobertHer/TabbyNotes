@@ -59,7 +59,7 @@ const Tab = ({idx}) => {
       }
     })
   }
-  
+
   const deleteOrClear = () => {
     if (state.tabs.length === 1 && idx === 0) {
       clear();
@@ -68,24 +68,17 @@ const Tab = ({idx}) => {
     }
   }
 
-  const openOrDelTab = (e) => {
-    if (e.which == 2) deleteOrClear();
-    openTab(e);
-  }
-  
   const deleteBtn = () => {
     if (state.activeTab === idx) {
-      return <span 
-        className='delete' 
-        onClick={deleteOrClear}
-      >✖</span>
+      return <span className='delete' onClick={deleteOrClear}>✖</span>
     }
   }
 
   return (
     <span 
       className={'tab' + active} 
-      onClick={openOrDelTab} 
+      onClick={openTab}
+      onAuxClick={deleteOrClear}
       onContextMenu={updateTitle}
     >
       <label id={idx}>
