@@ -1,93 +1,51 @@
-import React from 'react';
-import { useStateContext } from './StateContextProvider';
+import React from "react";
+import useActions from "./useActions";
+import useSelectedState from "./useSelectedState";
 
-const Tab = ({idx}) => {
-  const {state, dispatch} = useStateContext();
+function Tab({ idx }) {
+  const { activeTab, getTabTitle } = useSelectedState();
+  const { updateTabTitle, changeToTab, deleteOrResetTab } = useActions();
 
-  let active = ''
-  if (state.activeTab === idx) {
-    active += ' tab-active'
+  let active = "";
+  if (activeTab === idx) {
+    active += " tab-active";
   }
 
-  const updateTitle = (e) => {
+  function updateTitle(e) {
     e.preventDefault();
-    const newTitle = window.prompt(`Enter a new title`, state.tabs[idx].title);
-    if (!newTitle || newTitle.length === 0) return;
-    dispatch({
-      type: "UPDATE",
-      payload: {
-        tabIdx: idx,
-        title: newTitle
-      }
-    })
+    updateTabTitle(idx);
   }
 
-  const openTab = (e) => {
+  function openTab(e) {
     if (e.target.className === "delete") return;
-    dispatch({
-      type: "CHANGE_TAB",
-      payload: {
-        tabIdx: idx
-      }
-    })
-  }
-
-  const nextTab = () => {
-    if (state.activeTab !== idx) return idx;
-    if (idx === 0) return 0;
-    return idx - 1;
-  }
-
-  const deleteTab = () => {
-    const next = nextTab()
-    dispatch({
-      type: "DELETE_TAB",
-      payload: {
-        tabIdx: idx,
-        activeTab: next
-      }
-    })
-  }
-
-  const clear = () => {
-    dispatch({
-      type: "UPDATE",
-      payload: {
-        tabIdx: idx,
-        text: '',
-        title: "new"
-      }
-    })
-  }
-
-  const deleteOrClear = () => {
-    if (state.tabs.length === 1 && idx === 0) {
-      clear();
-    } else {
-      deleteTab();
-    }
-  }
-
-  const deleteBtn = () => {
-    if (state.activeTab === idx) {
-      return <span className='delete' onClick={deleteOrClear}>✖</span>
-    }
+    changeToTab(idx);
   }
 
   return (
-    <span 
-      className={'tab' + active} 
+    <span
+      className={`tab ${active}`}
       onClick={openTab}
-      onAuxClick={deleteOrClear}
+      onAuxClick={() => deleteOrResetTab(idx)}
       onContextMenu={updateTitle}
     >
-      <label id={idx}>
-        {state.tabs[idx].title}
-      </label>
+      <label id={idx}>{getTabTitle(idx)}</label>
 
-      {deleteBtn()}
+      <DeleteButton idx={idx} />
     </span>
-  )
-};
+  );
+}
 
-export default Tab
+function DeleteButton({ idx }) {
+  const { activeTab } = useSelectedState();
+  const { deleteOrResetTab } = useActions();
+
+  if (activeTab !== idx) return null;
+
+  return (
+    <button className="delete" onClick={() => deleteOrResetTab(idx)}>
+      ✖
+    </button>
+  );
+}
+
+export default Tab;

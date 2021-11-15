@@ -5,7 +5,7 @@ html {
   background-color: rgb(185, 233, 255);
 }
 
-.App {
+#App {
   border-radius: 4px;
   display: flex;
   flex-direction: column;

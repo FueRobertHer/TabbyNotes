@@ -1,64 +1,58 @@
-import React, { useRef } from 'react';
-import { useStateContext } from './StateContextProvider';
-import Tab from './tab'
+import React, { useRef } from "react";
+import useActions from "./useActions";
+import Tab from "./tab";
+import useSelectedState from "./useSelectedState";
 
-const Tabs = (props) => {
-  const {state, dispatch} = useStateContext();
+const GITHUB_LINK = "https://github.com/FueRobertHer";
+
+function Tabs() {
+  const { tabs, activeTabText } = useSelectedState();
+  const { addTab, updateActiveTabText } = useActions();
   const navRef = useRef(null);
 
-  const onWheel = (e) => {
+  function onChange(e) {
+    updateActiveTabText(e.target.value);
+  }
+
+  function scrollTabsHorizontally(e) {
     e.preventDefault();
-    let scrollPosition = navRef.current.scrollLeft;
+    const scrollPosition = navRef.current.scrollLeft;
     if (e.deltaX === 0) {
       navRef.current.scrollTo({
         top: 0,
-        left: scrollPosition + e.deltaY
-      })
+        left: scrollPosition + e.deltaY,
+      });
     }
-  }
-
-  const onChange = (e) => {
-    dispatch({
-      type: "UPDATE",
-      payload: {
-        tabIdx: state.activeTab,
-        text: e.target.value
-      }
-    })
-  }
-
-  const addTab = () => {
-    dispatch({
-      type: "ADD_TAB",
-    })
   }
 
   return (
     <>
-      <nav className='nav' ref={navRef} onWheel={onWheel}>
-        {state.tabs.map((_,idx) => 
-          <Tab 
-            key={'tab-' + idx}
-            idx={idx} 
-          />
-        )}
-        <button className='tab new-tab' onClick={addTab}>+</button>
+      <nav className="nav" ref={navRef} onWheel={scrollTabsHorizontally}>
+        {tabs.map((_, idx) => (
+          <Tab key={`tab-${idx}`} idx={idx} />
+        ))}
+        <button className="tab new-tab" onClick={addTab}>
+          +
+        </button>
       </nav>
 
-      <div className='body'>
-        <textarea 
-          id='text' 
-          wrap='soft' 
-          value={state.tabs[state.activeTab].text}
+      <div className="body">
+        <textarea
+          id="text"
+          wrap="soft"
+          value={activeTabText}
           onChange={onChange}
-        ></textarea>
+        />
       </div>
 
       <footer className="credit">
-        Made with love by <a href="https://github.com/FueRobertHer" rel='noopener noreferrer' target="_blank">Fue Her</a>
+        Made with love by &nbsp;
+        <a href={GITHUB_LINK} rel="noopener noreferrer" target="_blank">
+          Fue Her
+        </a>
       </footer>
     </>
-  )
-};
+  );
+}
 
-export default Tabs
+export default Tabs;
