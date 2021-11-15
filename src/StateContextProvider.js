@@ -1,33 +1,43 @@
-import React, { createContext, useContext, useReducer } from 'react';
-import reducer from './reducer';
+import React, { createContext, useContext, useReducer } from "react";
+import reducer from "./reducer";
+
+const SAVE_STATE = "saveState";
+
+const INITIAL_STATE = {
+  tabs: [
+    {
+      title: "new",
+      text: "",
+    },
+  ],
+  activeTab: 0,
+};
 
 const StateContext = createContext();
 
-export const useStateContext = () => {
+export function useStateContext() {
   const context = useContext(StateContext);
-  if (!context) throw new Error("This component isn't nested under a context provider")
+  if (!context)
+    throw new Error("This component isn't nested under a context provider");
   return context;
 }
 
-const initialState = {
-  tabs: [
-    {
-      title: 'new',
-      text: ''
-    }
-  ], 
-  activeTab: 0
-}
-
-const loadedState = JSON.parse(window.localStorage.getItem("saveState")) || initialState;
-const StateContextProvider = (props) => {
-  const [state, dispatch] = useReducer(reducer, loadedState);
+function StateContextProvider(props) {
+  const [state, dispatch] = useReducer(reducer, loadSavedState());
 
   return (
-    <StateContext.Provider value={{state, dispatch}}>
+    <StateContext.Provider value={{ state, dispatch }}>
       {props.children}
     </StateContext.Provider>
-  )
+  );
+}
+
+export function saveStateToLocalStorage(state) {
+  window.localStorage.setItem(SAVE_STATE, JSON.stringify(state));
+}
+
+export function loadSavedState() {
+  return JSON.parse(window.localStorage.getItem(SAVE_STATE)) || INITIAL_STATE;
 }
 
 export default StateContextProvider;

@@ -1,50 +1,56 @@
+import { saveStateToLocalStorage } from "./StateContextProvider";
+
+export const ADD_TAB = "ADD_TAB";
+export const DELETE_TAB = "DELETE_TAB";
+export const CHANGE_TAB = "CHANGE_TAB";
+export const UPDATE = "UPDATE";
+
 const reducer = (state, action) => {
-  const {type, payload} = action;
+  const { type, payload } = action;
   let newState;
   switch (type) {
-    case "ADD_TAB":
+    case ADD_TAB:
       newState = {
         ...state,
-        tabs: [...state.tabs, {title: "new", text: ""}],
-        activeTab: state.tabs.length
-      }
-      window.localStorage.setItem("saveState", JSON.stringify(newState));
+        tabs: [...state.tabs, { title: "new", text: "" }],
+        activeTab: state.tabs.length,
+      };
+      saveStateToLocalStorage(newState);
       return newState;
 
-    case "DELETE_TAB":
+    case DELETE_TAB:
       newState = {
         ...state,
         tabs: state.tabs.filter((_, idx) => idx !== payload.tabIdx),
-        activeTab: payload.activeTab
-      }
-      window.localStorage.setItem("saveState", JSON.stringify(newState));
+      };
+      saveStateToLocalStorage(newState);
       return newState;
 
-    case "CHANGE_TAB":
+    case CHANGE_TAB:
       newState = {
         ...state,
-        activeTab: payload.tabIdx
-      }
-      window.localStorage.setItem("saveState", JSON.stringify(newState));
+        activeTab: payload.tabIdx,
+      };
+      saveStateToLocalStorage(newState);
       return newState;
 
-    case "UPDATE":
+    case UPDATE:
       newState = {
         ...state,
         tabs: state.tabs.map((tab, idx) => {
-          if (idx !== payload.tabIdx) return tab
+          if (idx !== payload.tabIdx) return tab;
           return {
             ...tab,
-            text: payload.text || tab.text,
-            title: payload.title || tab.title
-          }
-        })
-      }
-      window.localStorage.setItem("saveState", JSON.stringify(newState));
+            text: payload.text,
+            title: payload.title || tab.title,
+          };
+        }),
+      };
+      saveStateToLocalStorage(newState);
       return newState;
     default:
       return state;
   }
-}
+};
 
 export default reducer;
