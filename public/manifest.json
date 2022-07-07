@@ -13,8 +13,7 @@
     "128": "kitty.png"
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'sha256-rkTb15qUZNrKoaKNKjLcVI0tnem580klo1J1DbTsPBg='; object-src 'self'",
-    "sandbox": "script-src 'self' 'sha256-rkTb15qUZNrKoaKNKjLcVI0tnem580klo1J1DbTsPBg='; object-src 'self'"
+    "extension_pages": "script-src 'self'; object-src 'self'"
   },
   "permissions": ["storage"]
 }

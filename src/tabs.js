@@ -16,7 +16,6 @@ function Tabs() {
   }
 
   function scrollTabsHorizontally(e) {
-    e.preventDefault();
     const scrollPosition = navRef.current.scrollLeft;
     if (e.deltaX === 0) {
       navRef.current.scrollTo({

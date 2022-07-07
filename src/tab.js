@@ -11,8 +11,7 @@ function Tab({ idx }) {
     active += " tab-active";
   }
 
-  function updateTitle(e) {
-    e.preventDefault();
+  function updateTitle() {
     updateTabTitle(idx);
   }
 

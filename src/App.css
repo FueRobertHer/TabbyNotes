@@ -10,8 +10,10 @@ html {
   display: flex;
   flex-direction: column;
   align-items: center;
+  max-height: 580px;
+  max-width: 780px;
+  min-height: 150px;
   min-width: 250px;
-  min-height: 500px;
   width: 35vw;
   height: 80vh;
 }

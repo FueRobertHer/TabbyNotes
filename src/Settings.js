@@ -31,6 +31,10 @@ function Settings() {
     collapseSettings();
   }
 
+  function toggleSettings() {
+    isSettingsVisible ? closeSettings() : openSettings();
+  }
+
   function closeSettingsDecorator(func) {
     func();
     closeSettings();
@@ -48,7 +52,7 @@ function Settings() {
   return (
     <ClickOutside onClickOutside={closeSettings}>
       <div className="settings-container">
-        <button className="tab new-tab" onClick={openSettings}>
+        <button className="tab new-tab" onClick={toggleSettings}>
           <SettingsIcon />
         </button>
     
