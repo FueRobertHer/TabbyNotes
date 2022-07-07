@@ -50,6 +50,9 @@ html {
 
 .label {
   margin-top: 5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: auto;
 }
 
 .tab {
@@ -66,6 +69,7 @@ html {
   background-color: white;
   filter: brightness(90%);
   font-size: 8px;
+  word-wrap: break-word;
 }
 
 .tab:hover {
@@ -73,7 +77,8 @@ html {
 }
 
 .tab-active {
-  min-width: fit-content;
+  max-width: 100px;
+  width: fit-content;
   padding: 0 5px 3px 8px;
   font-size: small;
   font-weight: bold;
@@ -93,6 +98,7 @@ html {
   border-right: none;
   border-top: none;
   margin-right: 1px;
+  padding-top: 5px;
 }
 
 .new-tab:focus {
@@ -121,6 +127,10 @@ html {
 .tab,
 .tab > label:hover {
   cursor: pointer;
+}
+
+.modal {
+  top: 100px;
 }
 
 .body {

@@ -20,13 +20,8 @@ function useActions() {
     });
   }
 
-  function updateTabTitle(tabIdx) {
-    const newTitle = window.prompt(
-      `Enter a new title`,
-      state.tabs[tabIdx].title
-    );
+  function updateTabTitle(tabIdx, newTitle) {
     if (!newTitle || newTitle.length === 0) return;
-
     dispatch({
       type: UPDATE,
       payload: {

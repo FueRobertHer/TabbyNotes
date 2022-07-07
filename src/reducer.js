@@ -52,7 +52,7 @@ const reducer = (state, action) => {
       const tabToUpdate = updatedTabs[payload.tabIdx]
       const updatedTab = {
         ...tabToUpdate,
-        text: payload.text,
+        text: payload.text || tabToUpdate.text,
         title: payload.title || tabToUpdate.title,
       }
       updatedTabs[payload.tabIdx] = updatedTab
