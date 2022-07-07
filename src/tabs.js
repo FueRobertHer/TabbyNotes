@@ -1,13 +1,14 @@
 import React, { useRef } from "react";
 import useActions from "./useActions";
 import Tab from "./tab";
+import Settings from "./Settings"
 import useSelectedState from "./useSelectedState";
 
 const GITHUB_LINK = "https://github.com/FueRobertHer";
 
 function Tabs() {
-  const { tabs, activeTabText } = useSelectedState();
-  const { addTab, updateActiveTabText } = useActions();
+  const { tabs, activeTabText, height, width } = useSelectedState();
+  const { updateActiveTabText } = useActions();
   const navRef = useRef(null);
 
   function onChange(e) {
@@ -26,14 +27,13 @@ function Tabs() {
   }
 
   return (
-    <>
+    <div id="App" style={{height: `${height}px`, width: `${width}px`}} >
       <nav className="nav" ref={navRef} onWheel={scrollTabsHorizontally}>
         {tabs.map((_, idx) => (
           <Tab key={`tab-${idx}`} idx={idx} />
         ))}
-        <button className="tab new-tab" onClick={addTab}>
-          +
-        </button>
+
+        <Settings/>
       </nav>
 
       <div className="body">
@@ -51,7 +51,7 @@ function Tabs() {
           Fue Her
         </a>
       </footer>
-    </>
+    </div>
   );
 }
 

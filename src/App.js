@@ -4,23 +4,23 @@ import Tabs from "./tabs";
 
 import "./App.css";
 
+const TAB_SPACE = "	";
+
 document.addEventListener("keydown", (e) => {
   const textEle = document.getElementById("text");
   if (document.activeElement === textEle && e.key === "Tab") {
     e.preventDefault();
-    let start = textEle.selectionStart;
-    let end = textEle.selectionEnd;
-    let text = textEle.value;
-    textEle.value = text.substr(0, start) + "	" + text.substr(end, text.length);
+    const start = textEle.selectionStart;
+    const end = start + 1;
+    textEle.setRangeText(TAB_SPACE)
+    textEle.setSelectionRange(end, end);
   }
 });
 
 function App() {
   return (
     <StateContextProvider>
-      <div id="App">
-        <Tabs />
-      </div>
+      <Tabs />
     </StateContextProvider>
   );
 }

@@ -22,16 +22,16 @@ function Tab({ idx }) {
   }
 
   return (
-    <span
+    <div
       className={`tab ${active}`}
       onClick={openTab}
       onAuxClick={() => deleteOrResetTab(idx)}
       onContextMenu={updateTitle}
     >
-      <label id={idx}>{getTabTitle(idx)}</label>
+      <label id={idx} className="label">{getTabTitle(idx)}</label>
 
       <DeleteButton idx={idx} />
-    </span>
+    </div>
   );
 }
 
