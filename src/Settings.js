@@ -5,9 +5,9 @@ import ClickOutside from "./ClickOutside"
 import { ReactComponent as SettingsIcon } from "./settings_icon.svg"
 
 const NEW_LINE = '\n';
-const TITLE_CONTENT_DIVIDER = NEW_LINE + '-----' + NEW_LINE;
-const DIVIDER = '~~~~~~~~~~~~~~~~~~~~';
-const CONTENT_DIVIDER = NEW_LINE + NEW_LINE + DIVIDER + NEW_LINE + DIVIDER + NEW_LINE + NEW_LINE + NEW_LINE;
+const TITLE_CONTENT_DIVIDER = NEW_LINE + '______' + NEW_LINE;
+const DIVIDER = '~~~~~~~~~~~~~~~~~~~~' + NEW_LINE + '~~~~~~~~~~~~~~~~~~~~' + NEW_LINE;
+const CONTENT_DIVIDER = NEW_LINE + NEW_LINE + DIVIDER + NEW_LINE + NEW_LINE;
 
 function Settings() {
   const { tabs, height, width } = useSelectedState();

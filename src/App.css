@@ -92,6 +92,7 @@ html {
   justify-content: center;
   border-right: none;
   border-top: none;
+  margin-right: 1px;
 }
 
 .new-tab:focus {

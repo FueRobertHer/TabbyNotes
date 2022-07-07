@@ -28,11 +28,11 @@ function Tabs() {
   return (
     <div id="App" style={{height: `${height}px`, width: `${width}px`}} >
       <nav className="nav" ref={navRef} onWheel={scrollTabsHorizontally}>
+        <Settings />
+        
         {tabs.map((_, idx) => (
           <Tab key={`tab-${idx}`} idx={idx} />
         ))}
-
-        <Settings/>
       </nav>
 
       <div className="body">
