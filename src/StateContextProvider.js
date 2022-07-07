@@ -3,7 +3,7 @@ import reducer from "./reducer";
 
 const SAVE_STATE = "saveState";
 
-const INITIAL_STATE = {
+export const INITIAL_STATE = {
   tabs: [
     {
       title: "new",
@@ -11,6 +11,8 @@ const INITIAL_STATE = {
     },
   ],
   activeTab: 0,
+  height: 500,
+  width: 250,
 };
 
 const StateContext = createContext();
@@ -36,8 +38,12 @@ export function saveStateToLocalStorage(state) {
   window.localStorage.setItem(SAVE_STATE, JSON.stringify(state));
 }
 
+function migrateToNewState(state) {
+  return { ...INITIAL_STATE, ...state };
+}
+
 export function loadSavedState() {
-  return JSON.parse(window.localStorage.getItem(SAVE_STATE)) || INITIAL_STATE;
+  return migrateToNewState(JSON.parse(window.localStorage.getItem(SAVE_STATE))) || INITIAL_STATE;
 }
 
 export default StateContextProvider;
