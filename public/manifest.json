@@ -3,7 +3,7 @@
   "name": "TabbyNotes",
   "description": "Notes taking extention with tabs using local storage",
   "version": "4.0.0",
-  "browser_action": {
+  "action": {
     "default_popup": "index.html",
     "default_title": "Open to take notes"
   },
@@ -12,6 +12,9 @@
     "48": "kitty.png",
     "128": "kitty.png"
   },
-  "content_security_policy": "script-src 'self' 'sha256-rkTb15qUZNrKoaKNKjLcVI0tnem580klo1J1DbTsPBg='; object-src 'self'",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'sha256-rkTb15qUZNrKoaKNKjLcVI0tnem580klo1J1DbTsPBg='; object-src 'self'",
+    "sandbox": "script-src 'self' 'sha256-rkTb15qUZNrKoaKNKjLcVI0tnem580klo1J1DbTsPBg='; object-src 'self'"
+  },
   "permissions": ["storage"]
 }
