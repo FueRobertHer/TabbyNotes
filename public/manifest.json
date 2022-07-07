@@ -13,9 +13,5 @@
     "128": "kitty.png"
   },
   "content_security_policy": "script-src 'self' 'sha256-rkTb15qUZNrKoaKNKjLcVI0tnem580klo1J1DbTsPBg='; object-src 'self'",
-  "permissions": ["storage"],
-  "options_ui": {
-    "page": "options.html",
-    "open_in_tab": true
-  }
+  "permissions": ["storage"]
 }
