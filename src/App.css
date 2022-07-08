@@ -50,9 +50,9 @@ html {
 
 .label {
   margin-top: 5px;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  overflow: auto;
 }
 
 .tab {
@@ -60,15 +60,16 @@ html {
   justify-content: space-between;
   align-items: center;
   padding: 0px 4px;
-  min-width: 10px;
-  width: 20px;
+  max-width: 50px;
+  min-width: 15px;
+  width: fit-content;
   height: 100%;
   border: 1px solid rgb(185, 233, 255);
   border-left: none;
   overflow: hidden;
   background-color: white;
   filter: brightness(90%);
-  font-size: 8px;
+  font-size: 10px;
   word-wrap: break-word;
 }
 
@@ -77,7 +78,8 @@ html {
 }
 
 .tab-active {
-  max-width: 100px;
+  max-width: 150px;
+  min-width: 100px;
   width: fit-content;
   padding: 0 5px 3px 8px;
   font-size: small;

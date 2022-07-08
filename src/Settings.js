@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import useSelectedState from "./useSelectedState";
 import useActions from "./useActions";
 import ClickOutside from "./ClickOutside"
@@ -8,10 +8,13 @@ const NEW_LINE = '\n';
 const TITLE_CONTENT_DIVIDER = NEW_LINE + '______' + NEW_LINE;
 const DIVIDER = '~~~~~~~~~~~~~~~~~~~~' + NEW_LINE + '~~~~~~~~~~~~~~~~~~~~' + NEW_LINE;
 const CONTENT_DIVIDER = NEW_LINE + NEW_LINE + DIVIDER + NEW_LINE + NEW_LINE;
+const MAX_HEIGHT = 580;
+const MIN_HEIGHT = 150;
+const MAX_WIDTH = 780;
+const MIN_WIDTH = 250;
 
 function Settings() {
-  const { tabs, height, width } = useSelectedState();
-  const { addTab, resetTabs, setHeight, setWidth, resetSettings } = useActions();
+  const { addTab } = useActions();
   const [isSettingsExpanded, setIsSettingsExpanded] = useState(false);
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
 
@@ -45,6 +48,46 @@ function Settings() {
     closeSettings();
   }
 
+  return (
+    <ClickOutside onClickOutside={closeSettings}>
+      <div className="settings-container">
+        <button className="tab new-tab" onClick={toggleSettings}>
+          <SettingsIcon />
+        </button>
+        {isSettingsVisible && (
+          <div className="settings-dropdown">
+            <button onClick={() => closeSettingsDecorator(addTab)}>
+              New tab
+            </button>
+            <button className="show-more" onClick={toggleExpandedSettings}>
+              {isSettingsExpanded ? 'Show less' : 'Show more'}
+            </button>
+            {isSettingsExpanded && (
+              <AdditionalSettings closeSettingsDecorator={closeSettingsDecorator} />
+            )}
+          </div>
+        )}
+      </div>
+    </ClickOutside>
+  )
+}
+
+function AdditionalSettings({ closeSettingsDecorator }) {
+  const { tabs, height, width } = useSelectedState();
+  const { resetTabs, setHeight, setWidth, resetSettings } = useActions();
+
+  useEffect(() => {
+    let boundedHeight = height;
+    if (boundedHeight < MIN_HEIGHT) boundedHeight = MIN_HEIGHT;
+    if (boundedHeight > MAX_HEIGHT) boundedHeight = MAX_HEIGHT;
+    if (boundedHeight !== height) setHeight(boundedHeight);
+
+    let boundedWidth = width;
+    if (boundedWidth < MIN_WIDTH) boundedWidth = MIN_WIDTH;
+    if (boundedWidth > MAX_WIDTH) boundedWidth = MAX_WIDTH;
+    if (boundedWidth !== width) setWidth(boundedWidth);
+  }, [])
+
   function onHeightChange(e) {
     setHeight(e.target.value);
   }
@@ -69,38 +112,20 @@ function Settings() {
     aTag.click();
   }
 
-
   return (
-    <ClickOutside onClickOutside={closeSettings}>
-      <div className="settings-container">
-        <button className="tab new-tab" onClick={toggleSettings}>
-          <SettingsIcon />
-        </button>
-    
-        {isSettingsVisible && (
-          <div className="settings-dropdown">
-            <button onClick={() => closeSettingsDecorator(addTab)}>New tab</button>
-            <button className="show-more" onClick={toggleExpandedSettings}>{isSettingsExpanded ? 'Show less' : 'Show more'}</button>
-            {isSettingsExpanded && (
-              <>
-                <button onClick={downloadNotes}>Download notes</button>
-
-                <label className="settings-label">
-                  Height:
-                  <input className="input-number" type="number" value={height} onChange={onHeightChange} />
-                </label>
-                <label className="settings-label">
-                  Width:
-                  <input className="input-number" type="number" value={width} onChange={onWidthChange}/>
-                </label>
-                <button onClick={resetSettings}>Reset settings</button>
-                <button onClick={() => closeSettingsDecorator(resetTabs)}>Reset tabs</button>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    </ClickOutside>
+    <>
+      <button onClick={downloadNotes}>Download notes</button>
+      <label className="settings-label">
+        Height:
+        <input className="input-number" type="number" value={height} onChange={onHeightChange} />
+      </label>
+      <label className="settings-label">
+        Width:
+        <input className="input-number" type="number" value={width} onChange={onWidthChange}/>
+      </label>
+      <button onClick={resetSettings}>Reset settings</button>
+      <button onClick={() => closeSettingsDecorator(resetTabs)}>Reset tabs</button>
+    </>
   )
 }
 

@@ -1,5 +1,4 @@
-import React, {useState} from "react";
-import ClickOutside from "./ClickOutside";
+import React from "react";
 import useActions from "./useActions";
 import useSelectedState from "./useSelectedState";
 
@@ -8,25 +7,10 @@ function Tab({ idx }) {
   const { updateTabTitle, changeToTab, deleteOrResetTab } = useActions();
 
   const initialTabTitle = getTabTitle(idx);
-  const [tabTitle, setTabTitle] = useState(initialTabTitle); 
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  
-  function openModal() {
-    setIsModalVisible(true);
-  }
-
-  function closeModal() {
-    setIsModalVisible(false);
-  }
-
-  function onTitleChange(e) {
-    setTabTitle(e.target.value);
-  }
 
   function updateTitle(e) {
     e.preventDefault();
-    updateTabTitle(idx, tabTitle);
-    closeModal();
+    updateTabTitle(idx);
   }
 
   function openTab(e) {
@@ -40,36 +24,18 @@ function Tab({ idx }) {
   }
 
   return (
-    <>
-      <dialog className="modal" open={isModalVisible}>
-        <ClickOutside onClickOutside={closeModal}>
-          <form>
-            <label>
-              <p>
-                Enter a new title:
-              </p>
-              <input type="text" value={tabTitle} onChange={onTitleChange} />
-            </label>
-            <div>
-              <button type="button" onClick={closeModal}>Cancel</button>
-              <button type="submit" onClick={updateTitle}>Confirm</button>
-            </div>
-          </form>
-        </ClickOutside>
-      </dialog>
-      <div
-        className={`tab ${active}`}
-        onClick={openTab}
-        onAuxClick={() => deleteOrResetTab(idx)}
-        onDoubleClick={openModal}
-      >
-        <label id={idx} className="label">
-          {initialTabTitle}
-        </label>
+    <div
+      className={`tab ${active}`}
+      onClick={openTab}
+      onDoubleClick={updateTitle}
+      onAuxClick={() => deleteOrResetTab(idx)}
+    >
+      <label id={idx} className="label">
+        {initialTabTitle}
+      </label>
 
-        <DeleteButton idx={idx} />
-      </div>
-    </>
+      <DeleteButton idx={idx} />
+    </div>
   );
 }
 
