@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React from "react";
 import useActions from "./useActions";
 import Tab from "./tab";
 import Settings from "./Settings"
@@ -9,11 +9,17 @@ const GITHUB_LINK = "https://github.com/FueRobertHer";
 
 function Tabs() {
   const { tabs, height, width } = useSelectedState();
+  const { addTab } = useActions();
   const { ref, scrollHorizontally } = useHorizontalScroll();
 
   return (
     <div id="App" style={{height: `${height}px`, width: `${width}px`}} >
-      <nav className="nav" ref={ref} onWheel={scrollHorizontally}>
+      <nav
+        className="nav"
+        ref={ref}
+        onWheel={scrollHorizontally}
+        onDoubleClick={addTab}
+      >
         <Settings />
         {tabs.map((_, idx) => (
           <Tab key={`tab-${idx}`} idx={idx} />

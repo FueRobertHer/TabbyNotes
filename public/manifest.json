@@ -7,11 +7,23 @@
     "default_popup": "index.html",
     "default_title": "Open to take notes"
   },
-  "icons": {
-    "16": "kitty.png",
-    "48": "kitty.png",
-    "128": "kitty.png"
-  },
+  "icons": [
+    {
+      "src": "kitty.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "kitty.png",
+      "sizes": "48x48",
+      "type": "image/png"
+    },
+    {
+      "src": "kitty.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    }
+  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   },
