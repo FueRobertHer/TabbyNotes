@@ -18,12 +18,12 @@ function Tabs() {
         className="nav"
         ref={ref}
         onWheel={scrollHorizontally}
-        onDoubleClick={addTab}
       >
         <Settings />
         {tabs.map((_, idx) => (
           <Tab key={`tab-${idx}`} idx={idx} />
         ))}
+        <div className="empty-space" onDoubleClick={addTab}/>
       </nav>
       <TabBody />
       <Credit />

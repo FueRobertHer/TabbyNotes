@@ -60,8 +60,8 @@ html {
   justify-content: space-between;
   align-items: center;
   padding: 0px 4px;
-  max-width: 50px;
-  min-width: 15px;
+  max-width: 100px;
+  min-width: 30px;
   width: fit-content;
   height: 100%;
   border: 1px solid rgb(185, 233, 255);
@@ -131,8 +131,9 @@ html {
   cursor: pointer;
 }
 
-.modal {
-  top: 100px;
+.empty-space {
+  height: 100%;
+  width: 100%;
 }
 
 .body {
