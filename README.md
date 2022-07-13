@@ -2,6 +2,12 @@ This project was bootstrapped with [Create React App](https://github.com/faceboo
 
 Icon made by Freepik from www.flaticon.com
 
+A simple note taking app created initially for the [Chrome web store]() but is also available as a [Mozilla add on]().
+
+I tend to like taking small quick notes when working online but dislike opening a text editor, word process, or new tab to do so. In my search of existing extensions, many lacked the features that I personally wanted; simple interface with minimal design and multi tab creation. Of the ones that did have them they were bulkier than I'd prefer so I decided to make my own both as a fun learning experience and to make something that I wanted to use.
+
+This project isn't being actively maintained but will see period updates when I feel the urge to add or update features.
+
 ## Available Scripts
 
 In the project directory, you can run:
