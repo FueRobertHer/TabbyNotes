@@ -50,10 +50,12 @@ const reducer = (state, action) => {
     case UPDATE:
       const updatedTabs = [...state.tabs]
       const tabToUpdate = updatedTabs[payload.tabIdx]
+      const text = payload.text !== undefined ? payload.text : tabToUpdate.text;
+      const title = payload.title !== undefined ? payload.title : tabToUpdate.title;
       const updatedTab = {
         ...tabToUpdate,
-        text: payload.text || tabToUpdate.text,
-        title: payload.title || tabToUpdate.title,
+        text,
+        title,
       }
       updatedTabs[payload.tabIdx] = updatedTab
       newState = {
