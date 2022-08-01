@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "TabbyNotes",
   "description": "Notes taking extention with tabs using local storage",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "action": {
     "default_popup": "index.html",
     "default_title": "Open to take notes"
