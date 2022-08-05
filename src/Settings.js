@@ -86,7 +86,7 @@ function AdditionalSettings({ closeSettingsDecorator }) {
     if (boundedWidth < MIN_WIDTH) boundedWidth = MIN_WIDTH;
     if (boundedWidth > MAX_WIDTH) boundedWidth = MAX_WIDTH;
     if (boundedWidth !== width) setWidth(boundedWidth);
-  }, [])
+  }, [height, setHeight, width, setWidth]);
 
   function onHeightChange(e) {
     setHeight(e.target.value);
