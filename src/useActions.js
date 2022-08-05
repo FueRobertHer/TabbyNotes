@@ -1,4 +1,14 @@
-import { ADD_TAB, DELETE_TAB, CHANGE_TAB, UPDATE, RESET_TABS, RESET_SETTINGS, SET_HEIGHT, SET_WIDTH } from "./reducer";
+import {
+  ADD_TAB,
+  DELETE_TAB,
+  CHANGE_TAB,
+  UPDATE,
+  RESET_TABS,
+  RESET_SETTINGS,
+  SET_HEIGHT,
+  SET_WIDTH,
+  SET_CONFIRM_DELETE,
+} from "./reducer";
 import { useStateContext } from "./StateContextProvider";
 
 function useActions() {
@@ -84,6 +94,7 @@ function useActions() {
     } else {
       deleteTab(tabIdx);
     }
+    toggleConfirmDelete();
   }
 
   function resetTabs() {
@@ -95,7 +106,7 @@ function useActions() {
   function resetSettings() {
     dispatch({
       type: RESET_SETTINGS,
-    })
+    });
   }
 
   function setHeight(number) {
@@ -116,6 +127,13 @@ function useActions() {
     }
   }
 
+  function toggleConfirmDelete(tabIdx = -1) {
+    dispatch({
+      type: SET_CONFIRM_DELETE,
+      payload: { confirmDelete: !state.confirmDelete, deleteIdx: tabIdx },
+    });
+  }
+
   return {
     addTab,
     updateActiveTabText,
@@ -128,6 +146,7 @@ function useActions() {
     resetSettings,
     setHeight,
     setWidth,
+    toggleConfirmDelete,
   };
 }
 

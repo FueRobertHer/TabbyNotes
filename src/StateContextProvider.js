@@ -13,6 +13,8 @@ export const INITIAL_STATE = {
   activeTab: 0,
   height: 500,
   width: 250,
+  confirmDelete: false,
+  deleteIdx: -1,
 };
 
 const StateContext = createContext();

@@ -205,3 +205,44 @@ html {
   font-size: 8px;
   bottom: -8px;
 }
+
+.modal-overlay {
+  align-items: center;
+  height: inherit;
+  justify-content: center;
+  position: absolute;
+  width: inherit;
+  background-color: black;
+  opacity: 30%;
+  padding: 10px;
+  z-index: 2;
+  margin-top: -10px;
+}
+
+.modal-container {
+  background-color: white;
+  border-radius: 4px;
+  color: black;
+  height: max-content;
+  left: calc(50% - 100px);
+  position: absolute;
+  top: 40%;
+  width: 200px;
+  z-index: 3;
+}
+
+.confirm-delete {
+  border-radius: 4px;
+  padding: 10px 15px 20px;
+}
+
+.confirm-delete>p {
+  display: flex;
+  justify-content: center;
+  flex-grow: 1;
+}
+
+.cancel-confirm-wrapper {
+  display: flex;
+  justify-content: space-evenly;
+}

@@ -12,7 +12,7 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     const start = textEle.selectionStart;
     const end = start + 1;
-    textEle.setRangeText(TAB_SPACE)
+    textEle.setRangeText(TAB_SPACE);
     textEle.setSelectionRange(end, end);
   }
 });

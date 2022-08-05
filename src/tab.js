@@ -4,7 +4,7 @@ import useSelectedState from "./useSelectedState";
 
 function Tab({ idx }) {
   const { activeTab, getTabTitle } = useSelectedState();
-  const { updateTabTitle, changeToTab, deleteOrResetTab } = useActions();
+  const { updateTabTitle, changeToTab, toggleConfirmDelete } = useActions();
 
   const initialTabTitle = getTabTitle(idx);
 
@@ -28,7 +28,7 @@ function Tab({ idx }) {
       className={`tab ${active}`}
       onClick={openTab}
       onDoubleClick={updateTitle}
-      onAuxClick={() => deleteOrResetTab(idx)}
+      onAuxClick={() => toggleConfirmDelete(idx)}
     >
       <label id={idx} className="label">
         {initialTabTitle}
@@ -41,12 +41,12 @@ function Tab({ idx }) {
 
 function DeleteButton({ idx }) {
   const { activeTab } = useSelectedState();
-  const { deleteOrResetTab } = useActions();
+  const { toggleConfirmDelete } = useActions();
 
   if (activeTab !== idx) return null;
 
   return (
-    <button className="delete" onClick={() => deleteOrResetTab(idx)}>
+    <button className="delete" onClick={() => toggleConfirmDelete(idx)}>
       ✖
     </button>
   );

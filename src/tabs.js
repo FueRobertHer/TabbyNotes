@@ -4,6 +4,7 @@ import Tab from "./tab";
 import Settings from "./Settings"
 import useSelectedState from "./useSelectedState";
 import useHorizontalScroll from "./useHorizontalScroll";
+import ConfirmDeleteModal from "./ConfirmDeleteModal";
 
 const GITHUB_LINK = "https://github.com/FueRobertHer";
 
@@ -13,20 +14,17 @@ function Tabs() {
   const { ref, scrollHorizontally } = useHorizontalScroll();
 
   return (
-    <div id="App" style={{height: `${height}px`, width: `${width}px`}} >
-      <nav
-        className="nav"
-        ref={ref}
-        onWheel={scrollHorizontally}
-      >
+    <div id="App" style={{ height: `${height}px`, width: `${width}px` }}>
+      <nav className="nav" ref={ref} onWheel={scrollHorizontally}>
         <Settings />
         {tabs.map((_, idx) => (
           <Tab key={`tab-${idx}`} idx={idx} />
         ))}
-        <div className="empty-space" onDoubleClick={addTab}/>
+        <div className="empty-space" onDoubleClick={addTab} />
       </nav>
       <TabBody />
       <Credit />
+      <ConfirmDeleteModal />
     </div>
   );
 }

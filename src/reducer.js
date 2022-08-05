@@ -8,6 +8,7 @@ export const UPDATE = "UPDATE";
 export const RESET_SETTINGS = "RESET_SETTINGS"
 export const SET_HEIGHT = "SET_HEIGHT";
 export const SET_WIDTH = "SET_WIDTH";
+export const SET_CONFIRM_DELETE = "SET_CONFIRM_DELETE";
 
 const reducer = (state, action) => {
   const { type, payload } = action;
@@ -18,8 +19,8 @@ const reducer = (state, action) => {
         ...INITIAL_STATE,
         height: state.height,
         width: state.width,
-      }
-      saveStateToLocalStorage(newState)
+      };
+      saveStateToLocalStorage(newState);
       return newState;
 
     case ADD_TAB:
@@ -48,42 +49,48 @@ const reducer = (state, action) => {
       return newState;
 
     case UPDATE:
-      const updatedTabs = [...state.tabs]
-      const tabToUpdate = updatedTabs[payload.tabIdx]
+      const updatedTabs = [...state.tabs];
+      const tabToUpdate = updatedTabs[payload.tabIdx];
       const text = payload.text !== undefined ? payload.text : tabToUpdate.text;
-      const title = payload.title !== undefined ? payload.title : tabToUpdate.title;
+      const title =
+        payload.title !== undefined ? payload.title : tabToUpdate.title;
       const updatedTab = {
         ...tabToUpdate,
         text,
         title,
-      }
-      updatedTabs[payload.tabIdx] = updatedTab
+      };
+      updatedTabs[payload.tabIdx] = updatedTab;
       newState = {
         ...state,
         tabs: updatedTabs,
       };
       saveStateToLocalStorage(newState);
       return newState;
-    
+
     case RESET_SETTINGS:
       newState = {
         ...INITIAL_STATE,
         tabs: state.tabs,
         activeTab: state.activeTab,
-      }
-      saveStateToLocalStorage(newState)
+      };
+      saveStateToLocalStorage(newState);
       return newState;
-    
+
     case SET_HEIGHT:
-      newState = { ...state, height: payload.height };
+      newState = { ...state, ...payload };
       saveStateToLocalStorage(newState);
       return newState;
-    
+
     case SET_WIDTH:
-      newState = { ...state, width: payload.width }
+      newState = { ...state, ...payload };
       saveStateToLocalStorage(newState);
       return newState;
-    
+
+    case SET_CONFIRM_DELETE:
+      newState = { ...state, ...payload };
+      saveStateToLocalStorage(newState);
+      return newState;
+
     default:
       return state;
   }
