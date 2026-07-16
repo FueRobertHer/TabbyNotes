@@ -89,6 +89,7 @@ export default function App() {
   const [pendingReset, setPendingReset] = useState(false);
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; edge: "before" | "after" } | null>(null);
+  const [tabOverflow, setTabOverflow] = useState({ start: false, end: false });
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
@@ -163,6 +164,35 @@ export default function App() {
     activeTab?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
   }, [workspace.activeNoteId]);
 
+  // Track whether the tab strip is scrolled away from either edge, to fade
+  // (rather than hard-clip) the tabs that run off the visible area.
+  const updateTabOverflow = useCallback(() => {
+    const el = tabListRef.current;
+    if (!el) return;
+    const vertical = workspace.settings.tabLayout === "vertical";
+    const pos = vertical ? el.scrollTop : el.scrollLeft;
+    const clientSize = vertical ? el.clientHeight : el.clientWidth;
+    const scrollSize = vertical ? el.scrollHeight : el.scrollWidth;
+    setTabOverflow({ start: pos > 1, end: pos < scrollSize - clientSize - 1 });
+  }, [workspace.settings.tabLayout]);
+
+  useEffect(() => {
+    updateTabOverflow();
+  }, [updateTabOverflow, workspace.notes.length, workspace.activeNoteId]);
+
+  const tabStripMask = useMemo(() => {
+    if (!tabOverflow.start && !tabOverflow.end) return undefined;
+    const axis = workspace.settings.tabLayout === "vertical" ? "to bottom" : "to right";
+    const fade = "24px";
+    const stops = [
+      tabOverflow.start ? "transparent 0" : "#000 0",
+      ...(tabOverflow.start ? [`#000 ${fade}`] : []),
+      ...(tabOverflow.end ? [`#000 calc(100% - ${fade})`] : []),
+      tabOverflow.end ? "transparent 100%" : "#000 100%",
+    ];
+    return `linear-gradient(${axis}, ${stops.join(", ")})`;
+  }, [tabOverflow, workspace.settings.tabLayout]);
+
   if (!activeNote) return null;
 
   const requestDelete = (note: Note) => {
@@ -204,7 +234,7 @@ export default function App() {
     <main className={`app-shell tabs-${workspace.settings.tabLayout}`}>
       <header className="app-header">
         <div className="logo-wrap">
-          <img src="/kitty.png" alt="TabbyNotes" className="h-8 w-8 shrink-0" />
+          <img src="/kitty.png" alt="TabbyNotes" className="shrink-0" />
         </div>
         <div className="flex items-center gap-2">
           <p aria-live="polite" className={`save-status ${saveStatus === "error" ? "save-status-error" : ""}`}>
@@ -224,6 +254,8 @@ export default function App() {
           role="tablist"
           aria-label="Open notes"
           aria-orientation={workspace.settings.tabLayout}
+          style={tabStripMask ? { maskImage: tabStripMask, WebkitMaskImage: tabStripMask } : undefined}
+          onScroll={updateTabOverflow}
           onWheel={(event) => {
             // The scrollbar is hidden; let a vertical wheel scroll the horizontal strip.
             if (workspace.settings.tabLayout === "horizontal" && event.deltaY !== 0) {
@@ -240,6 +272,16 @@ export default function App() {
                 key={note.id}
                 className={`note-tab ${isActive ? "note-tab-active" : ""} ${isDragging ? "note-tab-dragging" : ""} ${dropEdge ? `note-tab-drop note-tab-drop-${dropEdge}` : ""}`}
                 draggable
+                onMouseDown={(event) => {
+                  // Suppress the middle-click autoscroll so it can close the tab instead.
+                  if (event.button === 1) event.preventDefault();
+                }}
+                onAuxClick={(event) => {
+                  if (event.button === 1) {
+                    event.preventDefault();
+                    requestDelete(note);
+                  }
+                }}
                 onDragStart={(event) => {
                   setDraggedNoteId(note.id);
                   event.dataTransfer.effectAllowed = "move";
@@ -332,10 +374,10 @@ export default function App() {
               </div>
             );
           })}
-          <button className="tab-add" onClick={addNote} aria-label="Create a new note">
-            <Plus size={15} />
-          </button>
         </div>
+        <button className="tab-add" onClick={addNote} aria-label="Create a new note">
+          <Plus size={15} />
+        </button>
       </div>
 
       <section

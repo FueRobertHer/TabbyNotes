@@ -2,6 +2,10 @@
 
 :root {
   color-scheme: light;
+  --radius-xs: 6px;
+  --radius-sm: 9px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
   --paper: #fffaf0;
   --paper-deep: #f4ead8;
   --surface: #fffdf7;
@@ -97,9 +101,7 @@ input:focus-visible {
 }
 
 .app-shell {
-  background:
-    radial-gradient(circle at 14% -10%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 29%),
-    linear-gradient(180deg, var(--paper) 0%, color-mix(in srgb, var(--paper) 94%, var(--paper-deep)) 100%);
+  background: var(--paper);
   display: grid;
   grid-template-rows: 48px 40px minmax(0, 1fr) 25px;
   height: 100%;
@@ -107,17 +109,6 @@ input:focus-visible {
   overflow: hidden;
   position: relative;
   width: 100%;
-}
-
-.app-shell::before {
-  background-image: radial-gradient(color-mix(in srgb, var(--muted) 18%, transparent) 0.7px, transparent 0.7px);
-  background-size: 10px 10px;
-  content: "";
-  inset: 0;
-  opacity: 0.35;
-  pointer-events: none;
-  position: absolute;
-  z-index: -1;
 }
 
 .app-header {
@@ -129,24 +120,22 @@ input:focus-visible {
 
 .logo-wrap {
   align-items: center;
-  background: linear-gradient(150deg, var(--blush-soft), var(--accent-soft));
-  border: 1px solid color-mix(in srgb, var(--blush) 45%, var(--line));
-  border-radius: 13px;
-  box-shadow:
-    0 5px 14px color-mix(in srgb, var(--blush) 22%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--surface) 60%, transparent);
   display: flex;
   flex: 0 0 auto;
-  height: 34px;
+  height: 38px;
   justify-content: center;
-  overflow: hidden;
-  transform: rotate(-2deg);
-  transition: transform 0.18s ease;
-  width: 34px;
+  width: 38px;
 }
 
-.logo-wrap:hover {
-  transform: rotate(2deg) scale(1.04);
+.logo-wrap img {
+  filter: drop-shadow(0 2px 4px color-mix(in srgb, var(--ink) 18%, transparent));
+  height: 100%;
+  transition: transform 0.18s ease;
+  width: 100%;
+}
+
+.logo-wrap:hover img {
+  transform: scale(1.06) rotate(-3deg);
 }
 
 .icon-button,
@@ -164,7 +153,7 @@ input:focus-visible {
 
 .icon-button {
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   height: 36px;
   width: 36px;
 }
@@ -180,7 +169,7 @@ input:focus-visible {
 .danger-button,
 .settings-action {
   align-items: center;
-  border-radius: 11px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   display: inline-flex;
   font-size: 12px;
@@ -192,7 +181,9 @@ input:focus-visible {
 }
 
 .tab-strip-shell {
+  align-items: end;
   border-bottom: 1px solid var(--line);
+  display: flex;
   min-width: 0;
   overflow: hidden;
   padding: 0 13px;
@@ -201,8 +192,10 @@ input:focus-visible {
 .tab-strip {
   align-items: end;
   display: flex;
+  flex: 0 1 auto;
   gap: 4px;
   height: 40px;
+  min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
@@ -217,7 +210,7 @@ input:focus-visible {
   background: color-mix(in srgb, var(--surface-muted) 82%, transparent);
   border: 1px solid transparent;
   border-bottom: 0;
-  border-radius: 11px 11px 0 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
   display: flex;
   flex: 0 1 154px;
   height: 34px;
@@ -228,7 +221,7 @@ input:focus-visible {
 }
 
 .note-tab:hover {
-  background: color-mix(in srgb, var(--blush-soft) 55%, var(--surface-muted));
+  background: var(--surface-muted);
 }
 
 .note-tab-active {
@@ -328,7 +321,7 @@ input:focus-visible {
 }
 
 .tab-close {
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   flex: 0 0 auto;
   height: 22px;
   opacity: 0;
@@ -347,7 +340,7 @@ input:focus-visible {
 }
 
 .tab-add {
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   flex: 0 0 30px;
   height: 30px;
   margin: 0 0 4px 2px;
@@ -391,7 +384,7 @@ input:focus-visible {
   align-items: center;
   background: var(--surface-muted);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   display: flex;
   padding: 3px;
 }
@@ -400,7 +393,7 @@ input:focus-visible {
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   color: var(--muted);
   cursor: pointer;
   display: flex;
@@ -429,7 +422,7 @@ input:focus-visible {
 }
 
 .format-button {
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   height: 28px;
   width: 30px;
 }
@@ -456,9 +449,11 @@ input:focus-visible {
 }
 
 .tabs-vertical .tab-strip-shell {
+  align-items: stretch;
   background: color-mix(in srgb, var(--paper) 82%, var(--surface));
   border-bottom: 0;
   border-right: 1px solid var(--line);
+  flex-direction: column;
   grid-column: 1;
   grid-row: 2;
   min-width: 0;
@@ -470,14 +465,16 @@ input:focus-visible {
   align-items: stretch;
   flex-direction: column;
   gap: 4px;
-  height: 100%;
+  height: auto;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  width: 100%;
 }
 
 .tabs-vertical .note-tab {
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   flex: 0 0 36px;
   height: 36px;
   min-width: 0;
@@ -555,7 +552,7 @@ input:focus-visible {
   align-items: center;
   background: color-mix(in srgb, #d85b4b 16%, var(--surface));
   border: 1px solid color-mix(in srgb, #d85b4b 45%, var(--line));
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   bottom: 33px;
   box-shadow: var(--shadow);
   color: var(--ink);
@@ -574,7 +571,7 @@ input:focus-visible {
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   color: var(--accent-strong);
   cursor: pointer;
   display: inline-flex;
@@ -603,7 +600,7 @@ input:focus-visible {
 .dialog-panel {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   max-height: 525px;
   overflow: auto;
@@ -630,7 +627,7 @@ input:focus-visible {
   align-items: center;
   background: var(--surface-muted);
   border: 1px solid var(--line);
-  border-radius: 11px;
+  border-radius: var(--radius-md);
   color: var(--ink);
   display: flex;
   font-size: 12px;
@@ -703,7 +700,7 @@ input:focus-visible {
 .cm-live-inline-code {
   background: var(--surface-muted);
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   font-family: "DM Mono", "SFMono-Regular", Consolas, monospace;
   font-size: 0.9em;
   padding: 0.08em 0.25em;
@@ -755,19 +752,19 @@ input:focus-visible {
 }
 
 .cm-live-code-line-first {
-  border-radius: 9px 9px 0 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   border-top: 1px solid var(--line);
   padding-top: 5px !important;
 }
 
 .cm-live-code-line-last {
   border-bottom: 1px solid var(--line);
-  border-radius: 0 0 9px 9px;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
   padding-bottom: 5px !important;
 }
 
 .cm-live-code-line-first.cm-live-code-line-last {
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
 }
 
 .cm-live-task-complete {
