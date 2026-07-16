@@ -4,6 +4,20 @@ A local-only, tabbed Markdown notebook for Chrome and Firefox.
 
 TabbyNotes has no account, cloud sync, analytics, content scripts, or access to the pages you visit. Notes are saved as Markdown strings in the extension's local browser profile and can be imported or exported as `.md` files.
 
+## Install
+
+- **Firefox:** [Get TabbyNotes on Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/tabbynotes/)
+
+## Screenshots
+
+| Live preview (dark) | Live preview (light) |
+| --- | --- |
+| ![Live Markdown preview in the dark theme](docs/screenshots/live-preview-dark.png) | ![Live Markdown preview in the light theme](docs/screenshots/live-preview-light.png) |
+
+| Vertical tab rail | Markdown source view |
+| --- | --- |
+| ![Notes with tabs in a vertical rail](docs/screenshots/vertical-tabs-dark.png) | ![Raw Markdown source view](docs/screenshots/source-mode-light.png) |
+
 ## Highlights
 
 - Obsidian-style live preview keeps Markdown formatted and editable in one surface.
@@ -50,3 +64,9 @@ bun run build:firefox
 ## Privacy and persistence
 
 The extension requests no permissions. Notes are persisted through the extension page's standard `localStorage`; this data is local to the browser profile and is removed when the extension is uninstalled. Existing v4 data under the `saveState` key is migrated on first launch and retained as a recovery backup.
+
+## Credits
+
+The TabbyNotes icon is a cat icon from Flaticon, used under its [Free License](https://www.flaticon.com/legal) (attribution required):
+
+<a href="https://www.flaticon.com/free-icons/cat" title="cat icons">Cat icons created by Magnific - Flaticon</a>
