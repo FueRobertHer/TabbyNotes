@@ -31,7 +31,7 @@ export type WorkspaceAction =
   | { type: "note/update"; id: string; changes: Partial<Pick<Note, "title" | "markdown">> }
   | { type: "note/delete"; id: string }
   | { type: "note/activate"; id: string }
-  | { type: "note/reorder"; sourceId: string; targetId: string }
+  | { type: "note/reorder"; sourceId: string; targetId: string; edge?: "before" | "after" }
   | { type: "notes/replace"; notes: Note[]; activeNoteId?: string }
   | { type: "settings/update"; changes: Partial<WorkspaceSettings> };
 
@@ -108,14 +108,18 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
         : state;
 
     case "note/reorder": {
+      if (action.sourceId === action.targetId) return state;
       const sourceIndex = state.notes.findIndex((note) => note.id === action.sourceId);
       const targetIndex = state.notes.findIndex((note) => note.id === action.targetId);
-      if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return state;
+      if (sourceIndex < 0 || targetIndex < 0) return state;
 
       const notes = [...state.notes];
       const [source] = notes.splice(sourceIndex, 1);
       if (!source) return state;
-      notes.splice(targetIndex, 0, source);
+      // Recompute the target's index after removal, then drop before/after it.
+      const nextTargetIndex = notes.findIndex((note) => note.id === action.targetId);
+      const insertAt = nextTargetIndex + (action.edge === "after" ? 1 : 0);
+      notes.splice(insertAt, 0, source);
       return { ...state, notes };
     }
 

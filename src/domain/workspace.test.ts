@@ -75,6 +75,46 @@ describe("workspaceReducer", () => {
     expect(next.activeNoteId).toBe(first.id);
   });
 
+  it("drops a note after its target when the edge is 'after'", () => {
+    const first = createNote({ title: "First" });
+    const second = createNote({ title: "Second" });
+    const third = createNote({ title: "Third" });
+    const workspace = {
+      ...createWorkspace(),
+      notes: [first, second, third],
+      activeNoteId: first.id,
+    };
+
+    const next = workspaceReducer(workspace, {
+      type: "note/reorder",
+      sourceId: first.id,
+      targetId: second.id,
+      edge: "after",
+    });
+
+    expect(next.notes.map((note) => note.title)).toEqual(["Second", "First", "Third"]);
+  });
+
+  it("drops a note before its target when the edge is 'before'", () => {
+    const first = createNote({ title: "First" });
+    const second = createNote({ title: "Second" });
+    const third = createNote({ title: "Third" });
+    const workspace = {
+      ...createWorkspace(),
+      notes: [first, second, third],
+      activeNoteId: first.id,
+    };
+
+    const next = workspaceReducer(workspace, {
+      type: "note/reorder",
+      sourceId: third.id,
+      targetId: second.id,
+      edge: "before",
+    });
+
+    expect(next.notes.map((note) => note.title)).toEqual(["First", "Third", "Second"]);
+  });
+
   it("updates editor and tab layout preferences together", () => {
     const workspace = createWorkspace();
 

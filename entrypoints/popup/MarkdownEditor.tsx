@@ -1,6 +1,7 @@
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { Compartment, type Extension } from "@codemirror/state";
 import {
   type Command,
   drawSelection,
@@ -108,6 +109,24 @@ export const tabbyMarkdown = markdown({
   extensions: backtickFencedCode,
 });
 
+const SANS_FONT_STACK =
+  'Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+const MONO_FONT_STACK = '"DM Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace';
+
+// Extensions that depend on the live-preview toggle. Kept in a Compartment so the
+// toggle can be reconfigured in place instead of forcing a full editor remount,
+// which would otherwise discard the undo history.
+function previewExtensions(livePreviewEnabled: boolean): Extension {
+  return [
+    livePreviewEnabled ? livePreview : [],
+    EditorView.theme({
+      ".cm-scroller": {
+        fontFamily: livePreviewEnabled ? SANS_FONT_STACK : MONO_FONT_STACK,
+      },
+    }),
+  ];
+}
+
 export interface MarkdownEditorHandle {
   focus: () => void;
   wrapSelection: (before: string, after: string, placeholder: string) => void;
@@ -116,18 +135,27 @@ export interface MarkdownEditorHandle {
 }
 
 interface MarkdownEditorProps {
-  value: string;
+  /**
+   * Seeds the editor when it mounts. Later changes are reconciled into the view
+   * only when they differ from the current document, so the editor stays the
+   * source of truth for local typing while still reflecting external updates.
+   */
+  initialValue: string;
   onChange: (value: string) => void;
   label: string;
   livePreviewEnabled: boolean;
 }
 
 const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
-  function MarkdownEditor({ value, onChange, label, livePreviewEnabled }, ref) {
+  function MarkdownEditor({ initialValue, onChange, label, livePreviewEnabled }, ref) {
     const hostRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
     const onChangeRef = useRef(onChange);
-    const initialValueRef = useRef(value);
+    const initialValueRef = useRef(initialValue);
+    const previewCompartment = useRef(new Compartment()).current;
+    // Read at (re)mount only; the effect below keeps the compartment in sync afterward.
+    const livePreviewEnabledRef = useRef(livePreviewEnabled);
+    livePreviewEnabledRef.current = livePreviewEnabled;
 
     useEffect(() => {
       onChangeRef.current = onChange;
@@ -148,7 +176,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
           markdownFormattingKeymap,
           keymap.of([...defaultKeymap, ...tabbyHistoryKeymap]),
           tabbyMarkdown,
-          ...(livePreviewEnabled ? [livePreview] : []),
+          previewCompartment.of(previewExtensions(livePreviewEnabledRef.current)),
           EditorView.lineWrapping,
           EditorView.contentAttributes.of({
             "aria-label": label,
@@ -162,10 +190,6 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
           EditorView.theme({
             "&": { height: "100%", backgroundColor: "transparent" },
             ".cm-scroller": {
-              fontFamily:
-                livePreviewEnabled
-                  ? 'Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-                  : '"DM Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace',
               lineHeight: "1.72",
               overflow: "auto",
             },
@@ -198,7 +222,25 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
         view.destroy();
         viewRef.current = null;
       };
-    }, [label, livePreviewEnabled]);
+    }, [label, previewCompartment]);
+
+    // Toggle live/source in place so the undo history survives the switch.
+    useEffect(() => {
+      viewRef.current?.dispatch({
+        effects: previewCompartment.reconfigure(previewExtensions(livePreviewEnabled)),
+      });
+    }, [livePreviewEnabled, previewCompartment]);
+
+    // Reflect external document changes without clobbering local edits. When the
+    // change originated from this editor, the doc already matches and we skip it.
+    useEffect(() => {
+      const view = viewRef.current;
+      if (!view) return;
+      const current = view.state.doc.toString();
+      if (initialValue !== current) {
+        view.dispatch({ changes: { from: 0, to: current.length, insert: initialValue } });
+      }
+    }, [initialValue]);
 
     useImperativeHandle(ref, () => ({
       focus() {

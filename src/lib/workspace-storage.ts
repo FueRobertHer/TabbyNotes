@@ -9,6 +9,13 @@ import {
   WORKSPACE_VERSION,
 } from "../domain/workspace";
 
+// Storage intentionally uses window.localStorage rather than chrome.storage.local.
+// The popup is the only surface that reads or writes the workspace, so the synchronous
+// localStorage API keeps load/save simple (no async loading state) and, crucially, needs
+// no "storage" permission — preserving the extension's zero-permission privacy posture.
+// The tradeoffs (smaller quota, main-thread writes) are mitigated by debouncing saves in
+// the popup. Revisit chrome.storage only if a background/service-worker surface ever needs
+// the data or the quota becomes limiting.
 export const WORKSPACE_KEY = "tabby-notes:workspace:v5";
 export const LEGACY_KEY = "saveState";
 export const LEGACY_BACKUP_KEY = "tabby-notes:legacy-backup:v4";

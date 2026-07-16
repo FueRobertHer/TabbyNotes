@@ -88,23 +88,45 @@ export default function App() {
   const [pendingDelete, setPendingDelete] = useState<Note | null>(null);
   const [pendingReset, setPendingReset] = useState(false);
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; edge: "before" | "after" } | null>(null);
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
+  const workspaceRef = useRef(workspace);
+  workspaceRef.current = workspace;
 
   const activeNote = useMemo(
     () => workspace.notes.find((note) => note.id === workspace.activeNoteId) ?? workspace.notes[0],
     [workspace.activeNoteId, workspace.notes],
   );
 
-  useEffect(() => {
+  const persist = useCallback(() => {
     try {
-      saveWorkspace(workspace);
+      saveWorkspace(workspaceRef.current);
       setSaveStatus("saved");
     } catch {
       setSaveStatus("error");
     }
-  }, [workspace]);
+  }, []);
+
+  // Debounce writes so a burst of keystrokes serializes the workspace once, not per character.
+  useEffect(() => {
+    const timeout = window.setTimeout(persist, 400);
+    return () => window.clearTimeout(timeout);
+  }, [workspace, persist]);
+
+  // The debounce is cleared on unmount, so flush any pending change before the popup closes.
+  useEffect(() => {
+    const flush = () => {
+      if (document.visibilityState === "hidden") persist();
+    };
+    window.addEventListener("pagehide", persist);
+    document.addEventListener("visibilitychange", flush);
+    return () => {
+      window.removeEventListener("pagehide", persist);
+      document.removeEventListener("visibilitychange", flush);
+    };
+  }, [persist]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = workspace.settings.theme;
@@ -112,7 +134,11 @@ export default function App() {
 
   const addNote = useCallback(() => dispatch({ type: "note/add" }), []);
 
+  const anyDialogOpen = settingsOpen || pendingDelete !== null || pendingReset;
+
   useEffect(() => {
+    // A dialog owns the keyboard while open; don't create/switch notes behind it.
+    if (anyDialogOpen) return;
     const handleShortcut = (event: KeyboardEvent) => {
       const modifier = event.metaKey || event.ctrlKey;
       if (modifier && event.key.toLowerCase() === "n") {
@@ -130,7 +156,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [addNote, workspace.activeNoteId, workspace.notes]);
+  }, [addNote, anyDialogOpen, workspace.activeNoteId, workspace.notes]);
 
   useEffect(() => {
     const activeTab = tabListRef.current?.querySelector<HTMLElement>("[aria-selected='true']");
@@ -198,26 +224,58 @@ export default function App() {
           role="tablist"
           aria-label="Open notes"
           aria-orientation={workspace.settings.tabLayout}
+          onWheel={(event) => {
+            // The scrollbar is hidden; let a vertical wheel scroll the horizontal strip.
+            if (workspace.settings.tabLayout === "horizontal" && event.deltaY !== 0) {
+              event.currentTarget.scrollLeft += event.deltaY;
+            }
+          }}
         >
           {workspace.notes.map((note, noteIndex) => {
             const isActive = note.id === activeNote.id;
+            const isDragging = note.id === draggedNoteId;
+            const dropEdge = dropTarget?.id === note.id ? dropTarget.edge : null;
             return (
               <div
                 key={note.id}
-                className={`note-tab ${isActive ? "note-tab-active" : ""}`}
+                className={`note-tab ${isActive ? "note-tab-active" : ""} ${isDragging ? "note-tab-dragging" : ""} ${dropEdge ? `note-tab-drop note-tab-drop-${dropEdge}` : ""}`}
                 draggable
                 onDragStart={(event) => {
                   setDraggedNoteId(note.id);
                   event.dataTransfer.effectAllowed = "move";
                 }}
-                onDragEnd={() => setDraggedNoteId(null)}
-                onDragOver={(event) => event.preventDefault()}
+                onDragEnd={() => {
+                  setDraggedNoteId(null);
+                  setDropTarget(null);
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  if (!draggedNoteId || draggedNoteId === note.id) {
+                    setDropTarget(null);
+                    return;
+                  }
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  const isVertical = workspace.settings.tabLayout === "vertical";
+                  const midpoint = isVertical ? rect.top + rect.height / 2 : rect.left + rect.width / 2;
+                  const pointer = isVertical ? event.clientY : event.clientX;
+                  const edge = pointer < midpoint ? "before" : "after";
+                  setDropTarget((current) =>
+                    current?.id === note.id && current.edge === edge ? current : { id: note.id, edge },
+                  );
+                }}
                 onDrop={(event) => {
                   event.preventDefault();
-                  if (draggedNoteId) {
-                    dispatch({ type: "note/reorder", sourceId: draggedNoteId, targetId: note.id });
+                  if (draggedNoteId && dropTarget) {
+                    dispatch({
+                      type: "note/reorder",
+                      sourceId: draggedNoteId,
+                      targetId: dropTarget.id,
+                      edge: dropTarget.edge,
+                    });
                   }
                   setDraggedNoteId(null);
+                  setDropTarget(null);
                 }}
               >
                 <button
@@ -236,10 +294,15 @@ export default function App() {
 
                     if (event.altKey && event.shiftKey && (event.key === previousKey || event.key === nextKey)) {
                       event.preventDefault();
-                      const targetIndex = event.key === previousKey ? previousIndex : nextIndex;
-                      const target = workspace.notes[targetIndex];
+                      const movingBack = event.key === previousKey;
+                      const target = workspace.notes[movingBack ? previousIndex : nextIndex];
                       if (target) {
-                        dispatch({ type: "note/reorder", sourceId: note.id, targetId: target.id });
+                        dispatch({
+                          type: "note/reorder",
+                          sourceId: note.id,
+                          targetId: target.id,
+                          edge: movingBack ? "before" : "after",
+                        });
                       }
                       return;
                     }
@@ -263,7 +326,7 @@ export default function App() {
                   <FileText className="tab-file-icon" size={13} />
                   <span>{note.title}</span>
                 </button>
-                <button className="tab-close" onClick={() => requestDelete(note)} aria-label={`Close ${note.title}`}>
+                <button className="tab-close" tabIndex={isActive ? 0 : -1} onClick={() => requestDelete(note)} aria-label={`Close ${note.title}`}>
                   <X size={12} />
                 </button>
               </div>
@@ -314,9 +377,9 @@ export default function App() {
           <div className="editor-pane">
             <Suspense fallback={<div className="grid h-full place-items-center text-xs text-[var(--muted)]">Opening editor…</div>}>
               <MarkdownEditor
-                key={`${activeNote.id}:${workspace.settings.editorStyle}`}
+                key={activeNote.id}
                 ref={editorRef}
-                value={activeNote.markdown}
+                initialValue={activeNote.markdown}
                 label="Markdown note editor"
                 livePreviewEnabled={workspace.settings.editorStyle === "live"}
                 onChange={(markdown) =>
@@ -333,6 +396,16 @@ export default function App() {
         <span>{workspace.notes.length} {workspace.notes.length === 1 ? "tab" : "tabs"}</span>
         <span className="ml-auto">Ctrl+Tab to switch</span>
       </footer>
+
+      {saveStatus === "error" && (
+        <div className="save-alert" role="alert">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />
+          <span>Couldn’t save to this browser. Export your notes so you don’t lose them.</span>
+          <button className="save-alert-action" onClick={exportAll}>
+            <Download size={13} />Export all
+          </button>
+        </div>
+      )}
 
       <input ref={importRef} className="hidden" type="file" accept=".md,.markdown,text/markdown,text/plain" multiple onChange={importNotes} />
 

@@ -12,6 +12,8 @@
   --accent: #f5b957;
   --accent-strong: #c8643e;
   --accent-soft: #fff0cf;
+  --blush: #ef8bab;
+  --blush-soft: #ffe2ec;
   --active-line: #fff4dc;
   --selection: #f2c77f;
   --selection-ink: #241d18;
@@ -30,6 +32,8 @@
   --accent: #efad4c;
   --accent-strong: #f08b64;
   --accent-soft: #49351f;
+  --blush: #ec89a6;
+  --blush-soft: #47303a;
   --active-line: #332920;
   --selection: #663819;
   --selection-ink: #fff8ed;
@@ -49,6 +53,8 @@
     --accent: #efad4c;
     --accent-strong: #f08b64;
     --accent-soft: #49351f;
+    --blush: #ec89a6;
+    --blush-soft: #47303a;
     --active-line: #332920;
     --selection: #663819;
     --selection-ink: #fff8ed;
@@ -123,17 +129,24 @@ input:focus-visible {
 
 .logo-wrap {
   align-items: center;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  box-shadow: 0 5px 14px color-mix(in srgb, var(--ink) 10%, transparent);
+  background: linear-gradient(150deg, var(--blush-soft), var(--accent-soft));
+  border: 1px solid color-mix(in srgb, var(--blush) 45%, var(--line));
+  border-radius: 13px;
+  box-shadow:
+    0 5px 14px color-mix(in srgb, var(--blush) 22%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--surface) 60%, transparent);
   display: flex;
   flex: 0 0 auto;
   height: 34px;
   justify-content: center;
   overflow: hidden;
   transform: rotate(-2deg);
+  transition: transform 0.18s ease;
   width: 34px;
+}
+
+.logo-wrap:hover {
+  transform: rotate(2deg) scale(1.04);
 }
 
 .icon-button,
@@ -180,6 +193,8 @@ input:focus-visible {
 
 .tab-strip-shell {
   border-bottom: 1px solid var(--line);
+  min-width: 0;
+  overflow: hidden;
   padding: 0 13px;
 }
 
@@ -213,13 +228,15 @@ input:focus-visible {
 }
 
 .note-tab:hover {
-  background: var(--surface-muted);
+  background: color-mix(in srgb, var(--blush-soft) 55%, var(--surface-muted));
 }
 
 .note-tab-active {
   background: var(--surface);
   border-color: var(--line);
-  box-shadow: 0 -4px 14px color-mix(in srgb, var(--ink) 6%, transparent);
+  box-shadow:
+    0 -4px 14px color-mix(in srgb, var(--ink) 6%, transparent),
+    inset 0 2px 0 0 var(--accent);
   height: 38px;
 }
 
@@ -231,6 +248,52 @@ input:focus-visible {
   left: 0;
   position: absolute;
   right: 0;
+}
+
+.note-tab-dragging {
+  opacity: 0.4;
+}
+
+/* Insertion marker showing where a dragged tab will land. */
+.note-tab-drop::before {
+  background: var(--accent-strong);
+  border-radius: 4px;
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  z-index: 3;
+}
+
+.note-tab-drop-before::before {
+  bottom: 5px;
+  left: 0;
+  top: 5px;
+  width: 3px;
+}
+
+.note-tab-drop-after::before {
+  bottom: 5px;
+  right: 0;
+  top: 5px;
+  width: 3px;
+}
+
+.tabs-vertical .note-tab-drop-before::before {
+  bottom: auto;
+  height: 3px;
+  left: 5px;
+  right: 5px;
+  top: 0;
+  width: auto;
+}
+
+.tabs-vertical .note-tab-drop-after::before {
+  bottom: 0;
+  height: 3px;
+  left: 5px;
+  right: 5px;
+  top: auto;
+  width: auto;
 }
 
 .note-tab-label {
@@ -486,6 +549,43 @@ input:focus-visible {
 
 .save-status-error {
   color: #c84d40;
+}
+
+.save-alert {
+  align-items: center;
+  background: color-mix(in srgb, #d85b4b 16%, var(--surface));
+  border: 1px solid color-mix(in srgb, #d85b4b 45%, var(--line));
+  border-radius: 12px;
+  bottom: 33px;
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  display: flex;
+  font-size: 11px;
+  font-weight: 650;
+  gap: 8px;
+  left: 50%;
+  padding: 8px 12px;
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 40;
+}
+
+.save-alert-action {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--accent-strong);
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 700;
+  gap: 5px;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
+.save-alert-action:hover {
+  border-color: var(--accent);
 }
 
 .dialog-backdrop {
