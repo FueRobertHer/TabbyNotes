@@ -1,39 +1,46 @@
 {
   "name": "tabby-notes",
-  "version": "4.0.2",
+  "version": "5.0.0",
   "private": true,
-  "dependencies": {
-    "@testing-library/jest-dom": "^5.16.4",
-    "@testing-library/react": "^13.3.0",
-    "@testing-library/user-event": "^14.2.1",
-    "react": "^18.2.0",
-    "react-click-outside": "github:tj/react-click-outside",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.3.0",
-    "react-scripts": "^5.0.1"
-  },
-  "overrides": {
-    "nth-check": "2.0.1"
+  "type": "module",
+  "engines": {
+    "bun": ">=1.4.0"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox --mv3",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox --mv3",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox --mv3",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "bun run typecheck && bun run test && bun run build && bun run build:firefox",
+    "postinstall": "wxt prepare"
   },
-  "eslintConfig": {
-    "extends": "react-app"
+  "dependencies": {
+    "@codemirror/lang-markdown": "6.5.0",
+    "@codemirror/commands": "6.10.4",
+    "@codemirror/language": "6.12.4",
+    "@codemirror/state": "6.7.1",
+    "@codemirror/view": "6.43.6",
+    "@wxt-dev/module-react": "1.2.2",
+    "lucide-react": "1.24.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
   },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.2",
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "jsdom": "29.1.1",
+    "tailwindcss": "4.3.2",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10",
+    "wxt": "0.20.27"
   }
 }

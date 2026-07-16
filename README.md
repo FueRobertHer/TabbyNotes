@@ -1,76 +1,52 @@
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+# TabbyNotes
 
-Icon made by Freepik from www.flaticon.com
+A local-only, tabbed Markdown notebook for Chrome and Firefox.
 
-A simple note taking app created initially for the [Chrome web store](https://chrome.google.com/webstore/detail/tabbynotes/nhonielfcdgaojbfoacndbocgdodbpme) but is also available as a [Mozilla add on](https://addons.mozilla.org/en-US/firefox/addon/tabbynotes/?utm_source=addons.mozilla.org&utm_medium=referral&utm_content=search).
+TabbyNotes has no account, cloud sync, analytics, content scripts, or access to the pages you visit. Notes are saved as Markdown strings in the extension's local browser profile and can be imported or exported as `.md` files.
 
-I tend to like taking small quick notes when working online but dislike opening a text editor, word process, or new tab to do so. In my search of existing extensions, many lacked the features that I personally wanted; simple interface with minimal design and multi tab creation. Of the ones that did have them they were bulkier than I'd prefer so I decided to make my own both as a fun learning experience and to make something that I wanted to use.
+## Highlights
 
-This project isn't being actively maintained but will see period updates when I feel the urge to add or update features.
+- Obsidian-style live preview keeps Markdown formatted and editable in one surface.
+- Markdown syntax appears on the active line; a Source setting shows the raw document.
+- Tabs can sit horizontally above the editor or in a vertical rail.
+- Keyboard tab navigation, drag reordering, Markdown import/export, and light/dark themes.
 
-## Available Scripts
+## Toolchain
 
-In the project directory, you can run:
+- Bun 1.4 canary (Rust runtime)
+- TypeScript 7 (native Go compiler)
+- WXT and React 19
+- Tailwind CSS 4
+- CodeMirror 6
+- Vitest
 
-### `npm start`
+Install the current Bun 1.4 canary, then install dependencies:
 
-Runs the app in the development mode.<br />
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+```sh
+bun upgrade --canary
+bun install
+```
 
-The page will reload if you make edits.<br />
-You will also see any lint errors in the console.
+The project deliberately avoids Bun-canary-only APIs so it remains straightforward to move to the stable 1.4 channel.
 
-### `npm test`
+## Development
 
-Launches the test runner in the interactive watch mode.<br />
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+```sh
+bun run dev
+bun run dev:firefox
+```
 
-### `npm run build`
+## Verification
 
-Builds the app for production to the `build` folder.<br />
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```sh
+bun run typecheck
+bun run test
+bun run build
+bun run build:firefox
+```
 
-The build is minified and the filenames include the hashes.<br />
-Your app is ready to be deployed!
+`bun run typecheck` invokes the Go-based TypeScript 7 `tsc` compiler. WXT builds Chrome and Firefox Manifest V3 packages from the same source.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## Privacy and persistence
 
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
-
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
-
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/code-splitting
-
-### Analyzing the Bundle Size
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size
-
-### Making a Progressive Web App
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app
-
-### Advanced Configuration
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/advanced-configuration
-
-### Deployment
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/deployment
-
-### `npm run build` fails to minify
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify
+The extension requests no permissions. Notes are persisted through the extension page's standard `localStorage`; this data is local to the browser profile and is removed when the extension is uninstalled. Existing v4 data under the `saveState` key is migrated on first launch and retained as a recovery backup.
