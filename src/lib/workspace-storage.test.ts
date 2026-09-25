@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { createWorkspace } from "../domain/workspace";
+import { createNote, createWorkspace } from "../domain/workspace";
 import {
   LEGACY_BACKUP_KEY,
   LEGACY_KEY,
   INVALID_WORKSPACE_BACKUP_KEY,
   loadWorkspace,
+  notesToRestore,
+  parseBackup,
   saveWorkspace,
+  serializeBackup,
   WORKSPACE_KEY,
 } from "./workspace-storage";
 
@@ -101,5 +104,31 @@ describe("workspace storage", () => {
 
     expect(workspace.version).toBe(2);
     expect(localStorage.getItem(INVALID_WORKSPACE_BACKUP_KEY)).toBe(unsupported);
+  });
+
+  it("round-trips notes through a backup file", () => {
+    const workspace = {
+      ...createWorkspace(),
+      notes: [createNote({ title: "A", markdown: "# A" }), createNote({ title: "B" })],
+    };
+
+    expect(parseBackup(serializeBackup(workspace))).toEqual(workspace.notes);
+    expect(parseBackup("# not a backup")).toBeNull();
+    expect(parseBackup(JSON.stringify({ notes: "nope" }))).toBeNull();
+  });
+
+  it("skips unchanged notes and copies conflicting ones when restoring", () => {
+    const unchanged = createNote({ title: "Same", markdown: "same" });
+    const edited = createNote({ title: "Edited", markdown: "old" });
+    const fresh = createNote({ title: "New" });
+
+    const restored = notesToRestore(
+      [unchanged, { ...edited, markdown: "new" }, fresh],
+      [unchanged, edited],
+    );
+
+    expect(restored.map((note) => note.title)).toEqual(["Edited", "New"]);
+    expect(restored[0]?.id).not.toBe(edited.id);
+    expect(restored[1]).toBe(fresh);
   });
 });

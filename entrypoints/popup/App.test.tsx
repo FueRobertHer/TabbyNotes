@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createNote } from "../../src/domain/workspace";
-import { WORKSPACE_KEY } from "../../src/lib/workspace-storage";
+import { serializeBackup, WORKSPACE_KEY } from "../../src/lib/workspace-storage";
 import App from "./App";
 
 function seed(notes = [createNote({ title: "First" }), createNote({ title: "Second" })]) {
@@ -49,5 +49,32 @@ describe("App", () => {
       await user.keyboard("{Control>}{Shift>}t{/Shift}{/Control}");
     });
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["First", "Second"]);
+  });
+
+  it("restores a JSON backup alongside Markdown imports", async () => {
+    const [first] = seed();
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+
+    const backupNotes = [first!, createNote({ title: "From backup" })];
+    const backup = serializeBackup({
+      version: 2,
+      notes: backupNotes,
+      activeNoteId: first!.id,
+      settings: { theme: "light", editorStyle: "live", tabLayout: "horizontal", confirmDelete: true },
+    });
+    const input = container.querySelector<HTMLInputElement>("input[type='file']")!;
+    await user.upload(input, [
+      new File([backup], "backup.json", { type: "application/json" }),
+      new File(["# Hi"], "hello.md", { type: "text/markdown" }),
+    ]);
+
+    await screen.findByText("Imported 2 notes");
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "First",
+      "Second",
+      "From backup",
+      "hello",
+    ]);
   });
 });

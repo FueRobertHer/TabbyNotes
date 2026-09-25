@@ -182,3 +182,31 @@ export function saveWorkspace(
 ): void {
   storage.setItem(WORKSPACE_KEY, JSON.stringify(workspace));
 }
+
+export function serializeBackup(workspace: Workspace): string {
+  return `${JSON.stringify(workspace, null, 2)}\n`;
+}
+
+/** Reads the notes out of a backup made by serializeBackup, or null if the text isn't one. */
+export function parseBackup(text: string): Note[] | null {
+  try {
+    return parseWorkspace(JSON.parse(text))?.notes ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Prepares backed-up notes for adding to an existing workspace. Notes that are already
+ * present unchanged are skipped, so restoring the same backup twice doesn't duplicate
+ * them; a note whose ID exists with different content is kept as a copy with a new ID.
+ */
+export function notesToRestore(backup: Note[], existing: Note[]): Note[] {
+  const existingById = new Map(existing.map((note) => [note.id, note]));
+  return backup.flatMap((note) => {
+    const current = existingById.get(note.id);
+    if (!current) return [note];
+    if (current.title === note.title && current.markdown === note.markdown) return [];
+    return [{ ...note, id: crypto.randomUUID() }];
+  });
+}

@@ -2,6 +2,7 @@ import {
   Bold,
   Check,
   Code2,
+  DatabaseBackup,
   Download,
   FileDown,
   FileText,
@@ -45,7 +46,14 @@ import {
   workspaceReducer,
   type Note,
 } from "../../src/domain/workspace";
-import { loadWorkspace, saveWorkspace, WORKSPACE_KEY } from "../../src/lib/workspace-storage";
+import {
+  loadWorkspace,
+  notesToRestore,
+  parseBackup,
+  saveWorkspace,
+  serializeBackup,
+  WORKSPACE_KEY,
+} from "../../src/lib/workspace-storage";
 
 import Dialog from "./Dialog";
 import type { MarkdownEditorHandle } from "./MarkdownEditor";
@@ -86,8 +94,8 @@ function safeFilename(title: string): string {
   return safe || DEFAULT_NOTE_TITLE;
 }
 
-function downloadMarkdown(filename: string, content: string): void {
-  const url = URL.createObjectURL(new Blob([content], { type: "text/markdown;charset=utf-8" }));
+function downloadFile(filename: string, content: string, type = "text/markdown"): void {
+  const url = URL.createObjectURL(new Blob([content], { type: `${type};charset=utf-8` }));
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
@@ -109,6 +117,7 @@ export default function App() {
   const [dropTarget, setDropTarget] = useState<{ id: string; edge: "before" | "after" } | null>(null);
   const [tabOverflow, setTabOverflow] = useState({ start: false, end: false });
   const [undoToastNote, setUndoToastNote] = useState<Note | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
@@ -194,6 +203,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), UNDO_TOAST_MS);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
+  useEffect(() => {
     if (!undoToastNote) return;
     const timeout = window.setTimeout(() => setUndoToastNote(null), UNDO_TOAST_MS);
     return () => window.clearTimeout(timeout);
@@ -272,22 +287,36 @@ export default function App() {
     const combined = workspace.notes
       .map((note) => `# ${note.title}\n\n${note.markdown.trim()}\n`)
       .join("\n---\n\n");
-    downloadMarkdown("TabbyNotes.md", combined);
+    downloadFile("TabbyNotes.md", combined);
   };
 
+  const backUpAll = () => {
+    const date = new Date().toISOString().slice(0, 10);
+    downloadFile(`TabbyNotes-backup-${date}.json`, serializeBackup(workspace), "application/json");
+  };
+
+  // Accepts Markdown files (one note each) and TabbyNotes .json backups (every note inside).
   const importNotes = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
-    const notes = await Promise.all(
-      files.map(async (file) =>
-        createNote({
-          title: file.name.replace(/\.md(?:own)?$/i, "") || "Imported note",
-          markdown: await file.text(),
-        }),
-      ),
-    );
-    for (const note of notes) dispatch({ type: "note/add", note });
     event.target.value = "";
+    const imported: Note[] = [];
+    const skipped: string[] = [];
+    for (const file of files) {
+      const text = await file.text();
+      if (/\.json$/i.test(file.name)) {
+        const backup = parseBackup(text);
+        if (backup) imported.push(...notesToRestore(backup, [...workspaceRef.current.notes, ...imported]));
+        else skipped.push(file.name);
+      } else {
+        imported.push(
+          createNote({ title: file.name.replace(/\.(?:md|markdown|txt)$/i, "") || "Imported note", markdown: text }),
+        );
+      }
+    }
+    for (const note of imported) dispatch({ type: "note/add", note });
     setSettingsOpen(false);
+    const added = `Imported ${imported.length} ${imported.length === 1 ? "note" : "notes"}`;
+    setNotice(skipped.length > 0 ? `${added}. Not a TabbyNotes backup: ${skipped.join(", ")}` : added);
   };
 
   const activateTabAt = (index: number) => {
@@ -524,6 +553,14 @@ export default function App() {
             </button>
           </div>
         )}
+        {notice && (
+          <div className="toast" role="status">
+            <span className="toast-text">{notice}</span>
+            <button className="toast-dismiss" onClick={() => setNotice(null)} aria-label="Dismiss">
+              <X size={12} />
+            </button>
+          </div>
+        )}
         {saveStatus === "error" && (
           <div className="toast toast-error" role="alert">
             <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />
@@ -535,7 +572,7 @@ export default function App() {
         )}
       </div>
 
-      <input ref={importRef} className="hidden" type="file" accept=".md,.markdown,text/markdown,text/plain" multiple onChange={importNotes} />
+      <input ref={importRef} className="hidden" type="file" accept=".md,.markdown,.txt,.json,text/markdown,text/plain,application/json" multiple onChange={importNotes} />
 
       {settingsOpen && (
         <Dialog title="Workspace settings" onClose={() => setSettingsOpen(false)}>
@@ -572,11 +609,12 @@ export default function App() {
               </div>
             </SettingGroup>
 
-            <SettingGroup title="Markdown files" description="Import and export standard .md files. Nothing is uploaded.">
+            <SettingGroup title="Files and backups" description="Import .md files or a backup, and export standard .md files. A backup restores every tab as it was. Nothing is uploaded.">
               <div className="grid grid-cols-2 gap-2">
                 <button className="settings-action" onClick={() => importRef.current?.click()}><Import size={15} />Import</button>
-                <button className="settings-action" onClick={() => downloadMarkdown(`${safeFilename(activeNote.title)}.md`, activeNote.markdown)}><FileDown size={15} />Export tab</button>
-                <button className="settings-action col-span-2" onClick={exportAll}><Download size={15} />Export all tabs</button>
+                <button className="settings-action" onClick={() => downloadFile(`${safeFilename(activeNote.title)}.md`, activeNote.markdown)}><FileDown size={15} />Export tab</button>
+                <button className="settings-action" onClick={exportAll}><Download size={15} />Export all (.md)</button>
+                <button className="settings-action" onClick={backUpAll}><DatabaseBackup size={15} />Back up (.json)</button>
               </div>
             </SettingGroup>
 
