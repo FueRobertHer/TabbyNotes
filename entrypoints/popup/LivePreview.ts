@@ -1,4 +1,4 @@
-import type { EditorState, Range } from "@codemirror/state";
+import type { EditorState, Line, Range } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
   Decoration,
@@ -75,6 +75,176 @@ class HorizontalRuleWidget extends WidgetType {
     rule.className = "cm-live-horizontal-rule";
     return rule;
   }
+}
+
+// Safe subset of inline Markdown for table cells, built with textContent (never innerHTML).
+const inlinePattern = /(`[^`]+`)|(\*\*[^*]+\*\*|__[^_]+__)|(\*[^*]+\*|_[^_]+_)|(~~[^~]+~~)/g;
+
+function renderInline(text: string, parent: HTMLElement): void {
+  let last = 0;
+  for (const match of text.matchAll(inlinePattern)) {
+    const index = match.index ?? 0;
+    if (index > last) parent.append(text.slice(last, index));
+    const [token, code, strong, emphasis] = match;
+    const element = document.createElement(
+      code ? "code" : strong ? "strong" : emphasis ? "em" : "s",
+    );
+    const markerLength = code || emphasis ? 1 : 2;
+    element.textContent = token.slice(markerLength, token.length - markerLength);
+    parent.append(element);
+    last = index + token.length;
+  }
+  if (last < text.length) parent.append(text.slice(last));
+}
+
+type ColumnAlign = "left" | "center" | "right";
+
+/** Splits a table row into trimmed cells on unescaped pipes. */
+export function tableCells(line: string): string[] {
+  const trimmed = line.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "");
+  return trimmed.split(/(?<!\\)\|/).map((cell) => cell.trim().replace(/\\\|/g, "|"));
+}
+
+class TableRowWidget extends WidgetType {
+  constructor(
+    readonly cells: string[],
+    readonly columns: string,
+    readonly aligns: ColumnAlign[],
+    readonly header: boolean,
+    readonly last: boolean,
+  ) {
+    super();
+  }
+
+  override eq(other: TableRowWidget): boolean {
+    return (
+      this.header === other.header &&
+      this.last === other.last &&
+      this.columns === other.columns &&
+      this.aligns.join() === other.aligns.join() &&
+      this.cells.join("\u0000") === other.cells.join("\u0000")
+    );
+  }
+
+  override toDOM(): HTMLElement {
+    const row = document.createElement("span");
+    row.className = [
+      "cm-live-table-row",
+      this.header ? "cm-live-table-header" : "",
+      this.last ? "cm-live-table-last" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    row.style.gridTemplateColumns = this.columns;
+    this.aligns.forEach((align, index) => {
+      const cell = document.createElement("span");
+      cell.className = "cm-live-table-cell";
+      cell.style.textAlign = align;
+      renderInline(this.cells[index] ?? "", cell);
+      row.append(cell);
+    });
+    return row;
+  }
+
+  // Let clicks through so they move the cursor into the table and reveal its source.
+  override ignoreEvent(): boolean {
+    return false;
+  }
+}
+
+function safeImageUrl(value: string): string | null {
+  if (/^data:image\/(?:png|gif|jpe?g|webp);/i.test(value)) return value;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+class ImageWidget extends WidgetType {
+  constructor(
+    readonly src: string,
+    readonly alt: string,
+  ) {
+    super();
+  }
+
+  override eq(other: ImageWidget): boolean {
+    return this.src === other.src && this.alt === other.alt;
+  }
+
+  override toDOM(view: EditorView): HTMLElement {
+    const wrapper = document.createElement("span");
+    wrapper.className = "cm-live-image";
+    const image = document.createElement("img");
+    image.src = this.src;
+    image.alt = this.alt;
+    image.title = this.alt;
+    image.referrerPolicy = "no-referrer";
+    // The line's height changes once the image arrives, so ask CodeMirror to re-measure.
+    image.addEventListener("load", () => view.requestMeasure());
+    image.addEventListener("error", () => {
+      wrapper.replaceChildren(this.alt ? `🖼 ${this.alt}` : "🖼 Image failed to load");
+      wrapper.classList.add("cm-live-image-broken");
+      view.requestMeasure();
+    });
+    wrapper.append(image);
+    return wrapper;
+  }
+
+  override ignoreEvent(): boolean {
+    return false;
+  }
+}
+
+function selectionTouches(view: EditorView, from: number, to: number): boolean {
+  return view.state.selection.ranges.some((range) => range.from <= to && range.to >= from);
+}
+
+function decorateTable(view: EditorView, ranges: Range<Decoration>[], from: number, to: number): void {
+  const { doc } = view.state;
+  const lines: Line[] = [];
+  for (let number = doc.lineAt(from).number; number <= doc.lineAt(to).number; number += 1) {
+    lines.push(doc.line(number));
+  }
+  const [headerLine, delimiterLine, ...bodyLines] = lines;
+  if (!headerLine || !delimiterLine) return;
+
+  const header = tableCells(headerLine.text);
+  const aligns: ColumnAlign[] = tableCells(delimiterLine.text)
+    .slice(0, header.length)
+    .map((spec) =>
+      spec.startsWith(":") && spec.endsWith(":") ? "center" : spec.endsWith(":") ? "right" : "left",
+    );
+  while (aligns.length < header.length) aligns.push("left");
+
+  const rows = [header, ...bodyLines.map((line) => tableCells(line.text))];
+  // Every row is its own widget, so share column proportions to keep them aligned.
+  const columns = header
+    .map((_, index) => {
+      const longest = Math.max(...rows.map((cells) => (cells[index] ?? "").length));
+      return `${Math.min(40, Math.max(3, longest))}fr`;
+    })
+    .join(" ");
+
+  const addRow = (line: Line, cells: string[], isHeader: boolean, isLast: boolean) => {
+    ranges.push(Decoration.line({ class: "cm-live-table-line" }).range(line.from));
+    if (line.from < line.to) {
+      ranges.push(
+        Decoration.replace({
+          widget: new TableRowWidget(cells, columns, aligns, isHeader, isLast),
+        }).range(line.from, line.to),
+      );
+    }
+  };
+
+  addRow(headerLine, header, true, bodyLines.length === 0);
+  ranges.push(Decoration.line({ class: "cm-live-table-delimiter-line" }).range(delimiterLine.from));
+  ranges.push(Decoration.replace({}).range(delimiterLine.from, delimiterLine.to));
+  bodyLines.forEach((line, index) =>
+    addRow(line, rows[index + 1] ?? [], false, index === bodyLines.length - 1),
+  );
 }
 
 function lineIsActive(view: EditorView, position: number): boolean {
@@ -162,6 +332,28 @@ function buildDecorations(view: EditorView): DecorationSet {
             ),
           );
           return;
+        }
+
+        if (node.name === "Table") {
+          if (selectionTouches(view, node.from, node.to)) {
+            addLineDecorations(view, ranges, node.from, node.to, "cm-live-table-source");
+            return;
+          }
+          decorateTable(view, ranges, node.from, node.to);
+          return false;
+        }
+
+        if (node.name === "Image" && !lineIsActive(view, node.from)) {
+          const url = node.node.getChild("URL");
+          const src = url ? safeImageUrl(view.state.sliceDoc(url.from, url.to)) : null;
+          const altEnd = node.node.getChildren("LinkMark")[1]?.from ?? node.from;
+          if (src) {
+            const alt = view.state.sliceDoc(node.from + 2, altEnd);
+            ranges.push(
+              Decoration.replace({ widget: new ImageWidget(src, alt) }).range(node.from, node.to),
+            );
+            return false;
+          }
         }
 
         if (node.name === "ListItem") {
@@ -277,7 +469,13 @@ const livePreviewDecorations = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate): void {
-      if (update.docChanged || update.selectionSet || update.viewportChanged) {
+      // Long notes are parsed in the background, so also redraw when the tree grows.
+      if (
+        update.docChanged ||
+        update.selectionSet ||
+        update.viewportChanged ||
+        syntaxTree(update.startState) !== syntaxTree(update.state)
+      ) {
         this.decorations = buildDecorations(update.view);
       }
     }
