@@ -137,6 +137,46 @@ describe("livePreview", () => {
     expect(parent.querySelector<HTMLImageElement>(".cm-live-image img")?.src).toBe("https://example.com/dog.png");
   });
 
+  it("keeps a loaded image above its Markdown while the cursor is on it", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    const doc = "Intro\n\n![Fox](https://example.com/fox.png)\n\nAfter";
+    view = new EditorView({
+      parent,
+      doc,
+      selection: { anchor: 0 },
+      extensions: [markdown({ base: markdownLanguage }), livePreview, loadRemoteImages.of(true)],
+    });
+    expect(parent.textContent).not.toContain("fox.png");
+
+    // Clicking beside the image puts the cursor at the end of its line.
+    view.dispatch({ selection: { anchor: doc.indexOf("\n\nAfter") } });
+    const image = parent.querySelector<HTMLImageElement>(".cm-live-image-editing img");
+    expect(image?.src).toBe("https://example.com/fox.png");
+    expect(parent.textContent).toContain("https://example.com/fox.png");
+  });
+
+  it("waits for the mouse button to be released before showing an image's Markdown", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    const doc = "Intro\n\n![Hen](https://example.com/hen.png)\n\nAfter";
+    view = new EditorView({
+      parent,
+      doc,
+      selection: { anchor: 0 },
+      extensions: [markdown({ base: markdownLanguage }), livePreview, loadRemoteImages.of(true)],
+    });
+
+    // Drag-selecting from the top down past the image.
+    view.contentDOM.dispatchEvent(new MouseEvent("mousedown", { button: 0, bubbles: true }));
+    view.dispatch({ selection: { anchor: 0, head: doc.length } });
+    expect(parent.textContent).not.toContain("hen.png");
+
+    window.dispatchEvent(new MouseEvent("mouseup", { button: 0 }));
+    expect(parent.querySelector(".cm-live-image-editing img")).not.toBeNull();
+    expect(parent.textContent).toContain("https://example.com/hen.png");
+  });
+
   it("hides an image that loaded automatically, and every copy of it", () => {
     const parent = document.createElement("div");
     document.body.append(parent);

@@ -1186,6 +1186,12 @@ input:focus-visible {
   vertical-align: bottom;
 }
 
+/* Above its Markdown while that is being edited, on a row of its own. */
+.cm-live-image-editing {
+  display: block;
+  width: fit-content;
+}
+
 .cm-live-image img {
   border-radius: var(--radius-sm);
   display: block;

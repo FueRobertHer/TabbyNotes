@@ -1,4 +1,4 @@
-import { type EditorState, Facet, type Range, StateEffect } from "@codemirror/state";
+import { type EditorSelection, type EditorState, Facet, type Range, StateEffect } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode } from "@lezer/common";
 import {
@@ -168,9 +168,22 @@ export const loadRemoteImages = Facet.define<boolean, boolean>({
   combine: (values) => values.some(Boolean),
 });
 
+// Asks live preview to rebuild its decorations when something outside the document changed.
+const redrawPreview = StateEffect.define<null>();
+
 // Images the user showed or hid this session, by URL, so the choice survives redraws.
 const imageChoices = new Map<string, boolean>();
-const imageToggled = StateEffect.define<null>();
+
+// CodeMirror re-measures line heights only when the content's height changes, and a short note
+// is stretched to fill the editor, so a newly loaded image can leave clicks beside it landing on
+// the wrong line. Each load bumps this and redraws: widgets built before it count as changed
+// (keeping their DOM), which makes CodeMirror measure again.
+let imageLoads = 0;
+
+function imageSizeChanged(view: EditorView): void {
+  imageLoads += 1;
+  if (view.dom.isConnected) view.dispatch({ effects: redrawPreview.of(null) });
+}
 
 // Lucide's "image" and "image-off" icons (ISC license), built without React inside the editor.
 type IconNode = [tag: string, attributes: Record<string, string>][];
@@ -210,21 +223,37 @@ function iconElement(nodes: IconNode): SVGSVGElement {
 }
 
 class ImageWidget extends WidgetType {
+  readonly loads = imageLoads;
+
   constructor(
     readonly src: string,
     readonly alt: string,
     readonly shown: boolean,
+    // Shown above its Markdown source while the cursor is there, rather than in place of it.
+    readonly editing: boolean,
   ) {
     super();
   }
 
   override eq(other: ImageWidget): boolean {
+    return this.sameImage(other) && this.editing === other.editing && this.loads === other.loads;
+  }
+
+  private sameImage(other: ImageWidget): boolean {
     return this.src === other.src && this.alt === other.alt && this.shown === other.shown;
+  }
+
+  // Keep the existing picture when only its layout or measurement changed, so it doesn't flicker.
+  override updateDOM(dom: HTMLElement, _view: EditorView, from: ImageWidget): boolean {
+    if (!this.sameImage(from)) return false;
+    dom.classList.toggle("cm-live-image-editing", this.editing);
+    return true;
   }
 
   override toDOM(view: EditorView): HTMLElement {
     const wrapper = document.createElement("span");
     wrapper.className = `cm-live-image ${this.shown ? "cm-live-image-shown" : "cm-live-image-hidden"}`;
+    if (this.editing) wrapper.classList.add("cm-live-image-editing");
     if (this.shown) this.showImage(wrapper, view);
     else this.showLink(wrapper, view);
     return wrapper;
@@ -249,7 +278,7 @@ class ImageWidget extends WidgetType {
     button.append(iconElement(this.shown ? hideImageIcon : showImageIcon));
     button.addEventListener("click", () => {
       imageChoices.set(this.src, !this.shown);
-      view.dispatch({ effects: imageToggled.of(null) });
+      view.dispatch({ effects: redrawPreview.of(null) });
     });
     return button;
   }
@@ -272,12 +301,12 @@ class ImageWidget extends WidgetType {
     image.alt = this.alt;
     image.title = this.alt;
     image.referrerPolicy = "no-referrer";
-    // The line's height changes once the image arrives, so ask CodeMirror to re-measure.
-    image.addEventListener("load", () => view.requestMeasure());
+    // The line's height changes once the image arrives.
+    image.addEventListener("load", () => imageSizeChanged(view));
     image.addEventListener("error", () => {
       image.replaceWith(this.alt ? `🖼 ${this.alt}` : "🖼 Image failed to load");
       wrapper.classList.add("cm-live-image-broken");
-      view.requestMeasure();
+      imageSizeChanged(view);
     });
     wrapper.append(this.toggleButton(view), image);
   }
@@ -288,9 +317,30 @@ class ImageWidget extends WidgetType {
   }
 }
 
+// The selection when the mouse went down, while it's held. Images and tables show their source
+// when the selection reaches them, which moves the text below; waiting until the button is
+// released keeps the text under the pointer still while clicking and drag-selecting.
+const pointerSelections = new WeakMap<EditorView, EditorSelection>();
+
 function selectionTouches(view: EditorView, from: number, to: number): boolean {
-  return view.state.selection.ranges.some((range) => range.from <= to && range.to >= from);
+  const selection = pointerSelections.get(view) ?? view.state.selection;
+  return selection.ranges.some((range) => range.from <= to && range.to >= from);
 }
+
+const pointerSelection = EditorView.domEventHandlers({
+  mousedown(event, view) {
+    if (event.button !== 0 || pointerSelections.has(view)) return false;
+    pointerSelections.set(view, view.state.selection);
+    // A drag of selected text ends without a mouseup, so listen for the drag ending too.
+    const release = () => {
+      for (const type of ["mouseup", "dragend", "blur"]) window.removeEventListener(type, release, true);
+      pointerSelections.delete(view);
+      if (view.dom.isConnected) view.dispatch({ effects: redrawPreview.of(null) });
+    };
+    for (const type of ["mouseup", "dragend", "blur"]) window.addEventListener(type, release, true);
+    return false;
+  },
+});
 
 /** A row's cell texts, split on the row's own pipe nodes (so a quote's ">" isn't a cell). */
 function rowCells(state: EditorState, row: SyntaxNode): string[] {
@@ -459,21 +509,26 @@ function buildDecorations(view: EditorView): DecorationSet {
 
         // A plugin may not replace a line break, so images written across lines stay as text.
         const { doc } = view.state;
-        if (
-          node.name === "Image" &&
-          doc.lineAt(node.from).number === doc.lineAt(node.to).number &&
-          !selectionTouches(view, node.from, node.to)
-        ) {
+        if (node.name === "Image" && doc.lineAt(node.from).number === doc.lineAt(node.to).number) {
           const url = node.node.getChild("URL");
           const src = url ? safeImageUrl(view.state.sliceDoc(url.from, url.to)) : null;
           const altEnd = node.node.getChildren("LinkMark")[1]?.from ?? node.from;
           if (src) {
             const alt = view.state.sliceDoc(node.from + 2, altEnd);
             const shown = imageChoices.get(src) ?? (!src.startsWith("http") || view.state.facet(loadRemoteImages));
-            ranges.push(
-              Decoration.replace({ widget: new ImageWidget(src, alt, shown) }).range(node.from, node.to),
-            );
-            return false;
+            if (!selectionTouches(view, node.from, node.to)) {
+              ranges.push(
+                Decoration.replace({ widget: new ImageWidget(src, alt, shown, false) }).range(node.from, node.to),
+              );
+              return false;
+            }
+            // While the cursor is on its Markdown, a loaded image stays put above the source
+            // rather than collapsing, so the text around it doesn't jump under the pointer.
+            if (shown) {
+              ranges.push(
+                Decoration.widget({ widget: new ImageWidget(src, alt, shown, true), side: -1 }).range(node.from),
+              );
+            }
           }
         }
 
@@ -590,6 +645,8 @@ const livePreviewDecorations = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate): void {
+      const heldSelection = pointerSelections.get(update.view);
+      if (heldSelection && update.docChanged) pointerSelections.set(update.view, heldSelection.map(update.changes));
       // Long notes are parsed in the background, so also redraw when the tree grows.
       if (
         update.docChanged ||
@@ -597,7 +654,7 @@ const livePreviewDecorations = ViewPlugin.fromClass(
         update.viewportChanged ||
         syntaxTree(update.startState) !== syntaxTree(update.state) ||
         update.startState.facet(loadRemoteImages) !== update.state.facet(loadRemoteImages) ||
-        update.transactions.some((transaction) => transaction.effects.some((effect) => effect.is(imageToggled)))
+        update.transactions.some((transaction) => transaction.effects.some((effect) => effect.is(redrawPreview)))
       ) {
         this.decorations = buildDecorations(update.view);
       }
@@ -630,4 +687,4 @@ const livePreviewLinks = EditorView.domEventHandlers({
   },
 });
 
-export const livePreview = [livePreviewDecorations, livePreviewLinks];
+export const livePreview = [livePreviewDecorations, livePreviewLinks, pointerSelection];
