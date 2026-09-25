@@ -99,10 +99,13 @@ body,
   width: 760px;
 }
 
-/* Opened as a standalone window: fill it and follow its size. */
+/* In a standalone window or the side panel, fill it and follow its size. */
 :root[data-view="window"],
 :root[data-view="window"] body,
-:root[data-view="window"] #root {
+:root[data-view="window"] #root,
+:root[data-view="sidebar"],
+:root[data-view="sidebar"] body,
+:root[data-view="sidebar"] #root {
   height: 100%;
   width: 100%;
 }
@@ -1172,6 +1175,56 @@ input:focus-visible {
 .cm-editor .cm-content ::selection {
   background-color: var(--selection) !important;
   color: var(--selection-ink) !important;
+}
+
+/* Narrow side panels: tighten padding and let the toolbar scroll sideways. */
+@media (max-width: 560px) {
+  :root {
+    --editor-padding: 18px 16px 40px;
+  }
+
+  .editor-heading {
+    padding: 6px 12px 6px 14px;
+  }
+
+  .title-input {
+    font-size: 17px;
+  }
+
+  .formatting-bar {
+    overflow-x: auto;
+    padding: 4px 10px;
+    scrollbar-width: none;
+  }
+
+  .formatting-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .format-button {
+    flex: 0 0 auto;
+  }
+
+  :root .cm-editor .cm-panel.cm-search {
+    padding: 6px 34px 6px 12px;
+  }
+
+  .cm-editor .cm-textfield {
+    width: 140px;
+  }
+
+  .tabs-vertical {
+    grid-template-columns: 128px minmax(0, 1fr);
+  }
+
+  .app-footer {
+    gap: 10px;
+    padding: 0 12px;
+  }
+
+  .footer-hint {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

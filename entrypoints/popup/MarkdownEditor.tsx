@@ -256,7 +256,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
               lineHeight: "1.72",
               overflow: "auto",
             },
-            ".cm-content": { padding: "24px 30px 48px" },
+            ".cm-content": { padding: "var(--editor-padding, 24px 30px 48px)" },
             ".cm-line": { padding: "0" },
             ".cm-gutters": {
               backgroundColor: "transparent",

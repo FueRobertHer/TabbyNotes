@@ -16,6 +16,7 @@ import {
   Maximize2,
   Minus,
   Moon,
+  PanelRight,
   Plus,
   Quote,
   RotateCcw,
@@ -40,7 +41,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { browser } from "wxt/browser";
 
 import {
   createNote,
@@ -59,6 +59,13 @@ import {
 } from "../../src/lib/workspace-storage";
 
 import Dialog from "./Dialog";
+import {
+  canOpenSidePanel,
+  currentWindowId,
+  openSidePanel,
+  openStandaloneWindow,
+  viewMode,
+} from "./extension-views";
 import type { MarkdownEditorHandle } from "./MarkdownEditor";
 import QuickSwitcher from "./QuickSwitcher";
 
@@ -120,9 +127,6 @@ function downloadFile(filename: string, content: string, type = "text/markdown")
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-// main.tsx marks the document when the page was opened as a standalone window
-// rather than as the fixed-size toolbar popup.
-const isWindowView = () => document.documentElement.dataset.view === "window";
 
 export default function App() {
   const [workspace, dispatch] = useReducer(workspaceReducer, null, () => loadWorkspace());
@@ -190,15 +194,27 @@ export default function App() {
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
+  const view = viewMode();
+  const windowIdRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (view !== "popup") return;
+    currentWindowId().then((id) => {
+      windowIdRef.current = id;
+    }, () => {});
+  }, [view]);
+
   const openInWindow = useCallback(async () => {
     persist();
-    await browser.windows.create({
-      url: browser.runtime.getURL("/popup.html?view=window"),
-      type: "popup",
-      width: 1000,
-      height: 760,
-    });
+    await openStandaloneWindow();
     window.close();
+  }, [persist]);
+
+  const openInSidePanel = useCallback(() => {
+    persist();
+    openSidePanel(windowIdRef.current).then(
+      () => window.close(),
+      () => setNotice("Couldn’t open the side panel. Try again from the browser’s side panel menu."),
+    );
   }, [persist]);
 
   useEffect(() => {
@@ -373,7 +389,12 @@ export default function App() {
           <button className="icon-button" onClick={() => setSwitcherOpen(true)} aria-label="Go to note" title="Go to note (Ctrl/⌘ P)">
             <FileSearch size={16} />
           </button>
-          {!isWindowView() && (
+          {view === "popup" && canOpenSidePanel() && (
+            <button className="icon-button" onClick={openInSidePanel} aria-label="Open in the side panel" title="Open in the side panel">
+              <PanelRight size={16} />
+            </button>
+          )}
+          {view === "popup" && (
             <button className="icon-button" onClick={openInWindow} aria-label="Open in a resizable window" title="Open in a resizable window">
               <Maximize2 size={16} />
             </button>
@@ -584,7 +605,7 @@ export default function App() {
             Storage {Math.min(100, Math.round(storageUsed * 100))}% full
           </span>
         )}
-        <span className="ml-auto">Ctrl+Tab to switch</span>
+        <span className="footer-hint ml-auto">Ctrl+Tab to switch</span>
       </footer>
 
       <div className="toast-stack">
