@@ -107,6 +107,29 @@ export const tabbyHistoryKeymap = historyKeymap.filter(
   (binding) => binding.key !== "Mod-u",
 );
 
+const PASTED_URL = /^(?:https?:\/\/|mailto:)\S+$/i;
+
+// Pasting a URL while text is selected turns the selection into a Markdown link.
+export const pasteUrlAsLink = EditorView.domEventHandlers({
+  paste(event, view) {
+    const url = event.clipboardData?.getData("text/plain").trim() ?? "";
+    const { from, to } = view.state.selection.main;
+    if (!PASTED_URL.test(url) || from === to || view.state.selection.ranges.length > 1) return false;
+    const selected = view.state.sliceDoc(from, to);
+    // Replacing one URL with another is an ordinary paste.
+    if (PASTED_URL.test(selected.trim())) return false;
+
+    event.preventDefault();
+    const insert = `[${selected}](${url})`;
+    view.dispatch({
+      changes: { from, to, insert },
+      selection: { anchor: from + insert.length },
+      userEvent: "input.paste",
+    });
+    return true;
+  },
+});
+
 // Tab and Shift+Tab indent and outdent (e.g. to nest list items). Pressing Escape
 // first lets Tab move focus out of the editor, as CodeMirror does by default.
 export const tabbyEditingKeymap = keymap.of([
@@ -214,6 +237,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
           syntaxHighlighting(tabbyHighlightStyle),
           markdownFormattingKeymap,
           tabbyEditingKeymap,
+          pasteUrlAsLink,
           tabbyMarkdown,
           previewCompartment.of(previewExtensions(livePreviewEnabledRef.current)),
           EditorView.lineWrapping,

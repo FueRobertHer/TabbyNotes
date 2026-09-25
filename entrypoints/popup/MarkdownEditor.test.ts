@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   markdownFormattingKeymap,
+  pasteUrlAsLink,
   tabbyEditingKeymap,
   tabbyHistoryKeymap,
   tabbyMarkdown,
@@ -149,5 +150,27 @@ describe("Markdown editor keyboard shortcuts", () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(parent.querySelector(".cm-search")).not.toBeNull();
+  });
+
+  it.each([
+    { pasted: "https://example.com/a", selection: [4, 9], expected: "See [docs!](https://example.com/a)" },
+    { pasted: "https://example.com/a", selection: [9, 9], expected: null },
+    { pasted: "not a url", selection: [4, 9], expected: null },
+  ])("turns selected text into a link when pasting $pasted", ({ pasted, selection, expected }) => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    view = new EditorView({
+      parent,
+      doc: "See docs!",
+      selection: { anchor: selection[0]!, head: selection[1]! },
+      extensions: [pasteUrlAsLink],
+    });
+    const event = new Event("paste", { bubbles: true, cancelable: true }) as ClipboardEvent;
+    Object.defineProperty(event, "clipboardData", { value: { getData: () => pasted } });
+    view.contentDOM.dispatchEvent(event);
+
+    // Otherwise CodeMirror's own paste handling applies, which never builds a link.
+    if (expected) expect(view.state.doc.toString()).toBe(expected);
+    else expect(view.state.doc.toString()).not.toContain("](");
   });
 });
