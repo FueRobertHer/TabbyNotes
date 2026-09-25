@@ -37,7 +37,52 @@ export function openSidePanel(windowId: number | undefined): Promise<void> {
   return Promise.reject(new Error("This browser has no side panel for extensions."));
 }
 
+declare global {
+  interface Window {
+    /** Set on the standalone window's page so other extension pages can find and focus it. */
+    tabbyWindowId?: number;
+  }
+}
+
+/** Called by the standalone window's page as it starts, so the popup can find it later. */
+export function registerStandaloneWindow(): void {
+  currentWindowId().then(
+    (id) => {
+      if (id !== undefined) window.tabbyWindowId = id;
+    },
+    () => {},
+  );
+}
+
+/** The browser window ID of an open standalone TabbyNotes window, if there is one. */
+export function openStandaloneWindowId(): number | undefined {
+  let views: Window[];
+  try {
+    // Every extension page open in a tab or window; same origin, so their globals are readable.
+    // WXT types these as its own Window; they're the pages' DOM windows.
+    views = browser.extension.getViews({ type: "tab" }) as unknown as Window[];
+  } catch {
+    return undefined;
+  }
+  for (const view of views) {
+    if (view !== window && view.document.documentElement.dataset.view === "window" && view.tabbyWindowId !== undefined) {
+      return view.tabbyWindowId;
+    }
+  }
+  return undefined;
+}
+
+export async function focusWindow(windowId: number): Promise<void> {
+  await browser.windows.update(windowId, { focused: true });
+}
+
+/** Opens the standalone window, or brings the existing one forward so there's only ever one. */
 export async function openStandaloneWindow(): Promise<void> {
+  const existing = openStandaloneWindowId();
+  if (existing !== undefined) {
+    await focusWindow(existing);
+    return;
+  }
   await browser.windows.create({
     url: browser.runtime.getURL("/popup.html?view=window"),
     type: "popup",
