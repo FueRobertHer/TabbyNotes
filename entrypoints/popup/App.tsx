@@ -41,10 +41,12 @@ import {
   useRef,
   useState,
 } from "react";
+import { flushSync } from "react-dom";
 
 import {
   createNote,
   DEFAULT_NOTE_TITLE,
+  mergeWorkspaces,
   workspaceReducer,
   type Note,
   type Workspace,
@@ -53,6 +55,7 @@ import {
 import {
   loadWorkspace,
   notesToRestore,
+  readStoredWorkspace,
   parseBackup,
   saveWorkspace,
   serializeBackup,
@@ -177,8 +180,11 @@ export default function App() {
   const closedNotesRef = useRef<ClosedNote[]>([]);
   const workspaceRef = useRef(workspace);
   // The last workspace this copy and storage agreed on: what it last saved or received.
-  // It's the base for merging another copy's save.
+  // It's the base for merging another copy's save. The raw string shows whether storage
+  // has changed since, even before the other copy's storage event arrives here.
   const savedWorkspaceRef = useRef(workspace);
+  const [initialStoredRaw] = useState(() => readStoredWorkspace());
+  const savedRawRef = useRef(initialStoredRaw);
   workspaceRef.current = workspace;
   const unsavedStateRef = useRef(unsaved);
   unsavedStateRef.current = unsaved;
@@ -191,9 +197,20 @@ export default function App() {
   const persist = useCallback(() => {
     // Nothing changed here, e.g. only another copy's save was merged in.
     if (!unsavedStateRef.current) return;
-    const saving = workspaceRef.current;
+    let saving = workspaceRef.current;
     try {
-      saveWorkspace(saving);
+      // Another copy saved and its storage event hasn't been handled here yet. Merge its
+      // save in first rather than overwrite it.
+      const stored = readStoredWorkspace();
+      if (stored !== null && stored !== savedRawRef.current) {
+        const incoming = loadWorkspace();
+        const base = savedWorkspaceRef.current;
+        saving = mergeWorkspaces(base, saving, incoming);
+        savedWorkspaceRef.current = incoming;
+        savedRawRef.current = stored;
+        dispatchApp({ type: "workspace/merge", base, incoming });
+      }
+      savedRawRef.current = saveWorkspace(saving);
       savedWorkspaceRef.current = saving;
       dispatchApp({ type: "app/saved", workspace: saving });
       setSaveStatus("saved");
@@ -228,10 +245,16 @@ export default function App() {
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
       if (event.key !== WORKSPACE_KEY || event.newValue === null) return;
+      const stored = readStoredWorkspace();
+      // Already merged, e.g. by a save here that found it first.
+      if (stored === null || stored === savedRawRef.current) return;
       const incoming = loadWorkspace();
       const base = savedWorkspaceRef.current;
       savedWorkspaceRef.current = incoming;
-      dispatchApp({ type: "workspace/merge", base, incoming });
+      savedRawRef.current = stored;
+      // Render now, so a save that runs next (debounce, or the popup closing) starts from
+      // the merged state rather than the one before it.
+      flushSync(() => dispatchApp({ type: "workspace/merge", base, incoming }));
       setStorageUsed(storageUsage());
     };
     window.addEventListener("storage", handleStorage);

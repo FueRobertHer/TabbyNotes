@@ -121,7 +121,8 @@ function sameNote(a: Note, b: Note): boolean {
  * received), `local` is this copy's current state and `incoming` is what the other copy
  * just saved. Whatever changed here since `base` survives: edited, added, restored and
  * deleted notes, and changed settings. Everything else takes the incoming version. When
- * both copies edited the same note, the later edit wins. This copy keeps its own active note.
+ * both copies edited the same note, the later edit wins, and an edit in either copy
+ * outweighs a delete in the other. This copy keeps its own active note.
  */
 export function mergeWorkspaces(base: Workspace, local: Workspace, incoming: Workspace): Workspace {
   const baseById = new Map(base.notes.map((note) => [note.id, note]));
@@ -133,8 +134,9 @@ export function mergeWorkspaces(base: Workspace, local: Workspace, incoming: Wor
     const mine = localById.get(theirs.id);
     const original = baseById.get(theirs.id);
     if (!mine) {
-      // Missing here: deleted here if we had it before, otherwise new over there.
-      if (!original) notes.push(theirs);
+      // Missing here: new over there, or deleted here. As below, an edit made over there
+      // since the last sync outweighs the delete.
+      if (!original || !sameNote(theirs, original)) notes.push(theirs);
       continue;
     }
     const changedHere = !original || !sameNote(mine, original);

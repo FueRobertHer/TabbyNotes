@@ -282,10 +282,12 @@ describe("mergeWorkspaces", () => {
     expect(texts(deletedThere)).toEqual(["a:a"]);
   });
 
-  it("keeps a note edited here even if the other copy deleted it", () => {
-    const local = workspace([a, { ...b, markdown: "b typed here", updatedAt: 9 }]);
+  it("keeps a note edited in one copy even if the other deleted it", () => {
+    const editedHere = workspace([a, { ...b, markdown: "b typed here", updatedAt: 9 }]);
+    const editedThere = workspace([a, { ...b, markdown: "b typed there", updatedAt: 9 }]);
 
-    expect(texts(mergeWorkspaces(base, local, workspace([a])))).toEqual(["a:a", "b:b typed here"]);
+    expect(texts(mergeWorkspaces(base, editedHere, workspace([a])))).toEqual(["a:a", "b:b typed here"]);
+    expect(texts(mergeWorkspaces(base, workspace([a]), editedThere))).toEqual(["a:a", "b:b typed there"]);
   });
 
   it("lets the later edit win when both copies changed a note", () => {

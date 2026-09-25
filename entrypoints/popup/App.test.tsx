@@ -224,4 +224,34 @@ describe("App", () => {
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["First!"]);
     await waitFor(() => expect(storedTitles()).toEqual(["First!"]));
   });
+
+  it("merges another copy's save before writing, even if its storage event hasn't arrived", async () => {
+    const [first, second] = seed();
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.type(screen.getByRole("textbox", { name: "Note title" }), "!");
+    // The other copy saves a new note, but this copy saves before hearing about it.
+    seed([first!, second!, createNote({ title: "Made there" })]);
+    await waitFor(() => expect(storedTitles()).toEqual(["First!", "Second", "Made there"]));
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["First!", "Second", "Made there"]);
+  });
+
+  it("writes the merged state when the popup closes right after another copy saves", async () => {
+    const [first, second] = seed();
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.type(screen.getByRole("textbox", { name: "Note title" }), "!");
+    seed([first!, second!, createNote({ title: "Made there" })]);
+    // Both events arrive before React would normally render the merge.
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent("storage", { key: WORKSPACE_KEY, newValue: window.localStorage.getItem(WORKSPACE_KEY) }),
+      );
+      window.dispatchEvent(new Event("pagehide"));
+    });
+
+    expect(storedTitles()).toEqual(["First!", "Second", "Made there"]);
+  });
 });

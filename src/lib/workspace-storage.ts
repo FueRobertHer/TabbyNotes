@@ -194,11 +194,18 @@ export function loadWorkspace(storage: Storage = window.localStorage): Workspace
   return createWorkspace();
 }
 
+/** Saves the workspace and returns exactly what was stored. */
 export function saveWorkspace(
   workspace: Workspace,
   storage: Storage = window.localStorage,
-): void {
-  storage.setItem(WORKSPACE_KEY, JSON.stringify(workspace));
+): string {
+  const raw = JSON.stringify(workspace);
+  storage.setItem(WORKSPACE_KEY, raw);
+  return raw;
+}
+
+export function readStoredWorkspace(storage: Storage = window.localStorage): string | null {
+  return storage.getItem(WORKSPACE_KEY);
 }
 
 export function serializeBackup(workspace: Workspace): string {
