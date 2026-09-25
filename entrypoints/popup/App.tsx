@@ -11,6 +11,7 @@ import {
   Link,
   List,
   ListChecks,
+  Maximize2,
   Minus,
   Moon,
   Plus,
@@ -35,13 +36,15 @@ import {
   useRef,
   useState,
 } from "react";
+import { browser } from "wxt/browser";
 
 import {
   createNote,
   workspaceReducer,
   type Note,
 } from "../../src/domain/workspace";
-import { loadWorkspace, saveWorkspace } from "../../src/lib/workspace-storage";
+import { loadWorkspace, saveWorkspace, WORKSPACE_KEY } from "../../src/lib/workspace-storage";
+
 import Dialog from "./Dialog";
 import type { MarkdownEditorHandle } from "./MarkdownEditor";
 
@@ -80,6 +83,10 @@ function downloadMarkdown(filename: string, content: string): void {
   anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
+
+// main.tsx marks the document when the page was opened as a standalone window
+// rather than as the fixed-size toolbar popup.
+const isWindowView = () => document.documentElement.dataset.view === "window";
 
 export default function App() {
   const [workspace, dispatch] = useReducer(workspaceReducer, null, () => loadWorkspace());
@@ -127,6 +134,28 @@ export default function App() {
       window.removeEventListener("pagehide", persist);
       document.removeEventListener("visibilitychange", flush);
     };
+  }, [persist]);
+
+  // The popup and a standalone window can be open at once. Pick up changes the other
+  // one saved so neither overwrites the other with a stale copy.
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== WORKSPACE_KEY || event.newValue === null) return;
+      dispatch({ type: "workspace/replace", workspace: loadWorkspace() });
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  const openInWindow = useCallback(async () => {
+    persist();
+    await browser.windows.create({
+      url: browser.runtime.getURL("/popup.html?view=window"),
+      type: "popup",
+      width: 1000,
+      height: 760,
+    });
+    window.close();
   }, [persist]);
 
   useEffect(() => {
@@ -241,6 +270,11 @@ export default function App() {
             {saveStatus === "saved" ? <Check size={11} /> : <span className="h-2 w-2 rounded-full bg-red-500" />}
             {saveStatus === "saved" ? "Saved" : "Save failed"}
           </p>
+          {!isWindowView() && (
+            <button className="icon-button" onClick={openInWindow} aria-label="Open in a resizable window" title="Open in a resizable window">
+              <Maximize2 size={16} />
+            </button>
+          )}
           <button className="icon-button" onClick={() => setSettingsOpen(true)} aria-label="Open settings">
             <Settings size={16} />
           </button>

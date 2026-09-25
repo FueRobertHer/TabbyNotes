@@ -78,6 +78,14 @@ body,
   width: 760px;
 }
 
+/* Opened as a standalone window: fill it and follow its size. */
+:root[data-view="window"],
+:root[data-view="window"] body,
+:root[data-view="window"] #root {
+  height: 100%;
+  width: 100%;
+}
+
 body {
   background: var(--paper-deep);
   color: var(--ink);
