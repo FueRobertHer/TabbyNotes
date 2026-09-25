@@ -42,7 +42,8 @@ export type WorkspaceAction =
   | { type: "note/reorder"; sourceId: string; targetId: string; edge?: "before" | "after" }
   | { type: "notes/replace"; notes: Note[]; activeNoteId?: string }
   | { type: "settings/update"; changes: Partial<WorkspaceSettings> }
-  | { type: "workspace/replace"; workspace: Workspace };
+  | { type: "workspace/replace"; workspace: Workspace }
+  | { type: "workspace/merge"; base: Workspace; incoming: Workspace };
 
 export type NoteChanges = Partial<Pick<Note, "title" | "markdown" | "autoTitle">>;
 
@@ -100,36 +101,66 @@ export function titleIsAutomatic(note: Note): boolean {
 function updateNote(note: Note, changes: NoteChanges): Note {
   const next: Note = { ...note, ...changes, updatedAt: Date.now() };
   if (changes.title !== undefined) {
-    // Typing a title takes it over, unless the change says otherwise (e.g. resetting to default).
+    // Typing a title takes it over, unless the change says otherwise.
     next.autoTitle = changes.autoTitle ?? false;
-  } else if (changes.markdown !== undefined && titleIsAutomatic(note)) {
+  } else if (changes.autoTitle === true || (changes.markdown !== undefined && titleIsAutomatic(note))) {
+    // Handing the title back to the heading (e.g. after clearing it) applies right away.
     next.autoTitle = true;
-    next.title = leadingHeading(changes.markdown) ?? DEFAULT_NOTE_TITLE;
+    next.title = leadingHeading(next.markdown) ?? DEFAULT_NOTE_TITLE;
   }
   return next;
 }
 
+function sameNote(a: Note, b: Note): boolean {
+  return a.title === b.title && a.markdown === b.markdown && a.autoTitle === b.autoTitle;
+}
+
 /**
- * Combines a workspace another window just saved with this window's state, for when this
- * window has edits it hasn't saved yet (`lastSavedAt` is when it last did). Notes changed
- * here since then keep this window's version unless the other copy is newer; notes created
- * here since then are kept. Settings come from the other window, and this window keeps its
- * own active note.
+ * Three-way merge for when another open copy (popup, window or side panel) saves.
+ * `base` is the last workspace both copies agreed on (what this copy last saved or
+ * received), `local` is this copy's current state and `incoming` is what the other copy
+ * just saved. Whatever changed here since `base` survives: edited, added, restored and
+ * deleted notes, and changed settings. Everything else takes the incoming version. When
+ * both copies edited the same note, the later edit wins. This copy keeps its own active note.
  */
-export function mergeWorkspaces(local: Workspace, incoming: Workspace, lastSavedAt: number): Workspace {
+export function mergeWorkspaces(base: Workspace, local: Workspace, incoming: Workspace): Workspace {
+  const baseById = new Map(base.notes.map((note) => [note.id, note]));
   const localById = new Map(local.notes.map((note) => [note.id, note]));
   const incomingIds = new Set(incoming.notes.map((note) => note.id));
-  const notes = incoming.notes.map((note) => {
-    const mine = localById.get(note.id);
-    return mine && mine.updatedAt > lastSavedAt && mine.updatedAt > note.updatedAt ? mine : note;
-  });
-  for (const note of local.notes) {
-    if (!incomingIds.has(note.id) && note.updatedAt > lastSavedAt) notes.push(note);
+
+  const notes: Note[] = [];
+  for (const theirs of incoming.notes) {
+    const mine = localById.get(theirs.id);
+    const original = baseById.get(theirs.id);
+    if (!mine) {
+      // Missing here: deleted here if we had it before, otherwise new over there.
+      if (!original) notes.push(theirs);
+      continue;
+    }
+    const changedHere = !original || !sameNote(mine, original);
+    const changedThere = !original || !sameNote(theirs, original);
+    notes.push(changedHere && (!changedThere || mine.updatedAt >= theirs.updatedAt) ? mine : theirs);
   }
+  // Notes only here: added or restored here, or deleted over there. An edit made here
+  // since the last sync outweighs the other copy's delete.
+  local.notes.forEach((mine, index) => {
+    if (incomingIds.has(mine.id)) return;
+    const original = baseById.get(mine.id);
+    if (!original || !sameNote(mine, original)) notes.splice(Math.min(index, notes.length), 0, mine);
+  });
+  if (notes.length === 0) notes.push(createNote());
+
+  const settings = { ...incoming.settings };
+  for (const key of Object.keys(settings) as (keyof WorkspaceSettings)[]) {
+    if (local.settings[key] !== base.settings[key]) Object.assign(settings, { [key]: local.settings[key] });
+  }
+
   const activeNoteId = notes.some((note) => note.id === local.activeNoteId)
     ? local.activeNoteId
-    : incoming.activeNoteId;
-  return { ...incoming, notes, activeNoteId };
+    : notes.some((note) => note.id === incoming.activeNoteId)
+      ? incoming.activeNoteId
+      : (notes[0]?.id ?? "");
+  return { ...incoming, notes, settings, activeNoteId };
 }
 
 export function workspaceReducer(state: Workspace, action: WorkspaceAction): Workspace {
@@ -212,6 +243,10 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
 
     case "workspace/replace":
       return action.workspace;
+
+    // Merged against the latest state here, so edits not yet rendered aren't lost.
+    case "workspace/merge":
+      return mergeWorkspaces(action.base, state, action.incoming);
   }
 }
 

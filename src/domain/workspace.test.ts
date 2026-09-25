@@ -114,12 +114,9 @@ describe("workspaceReducer", () => {
     edit("# Something else");
     expect(title()).toBe("Groceries");
 
-    // Resetting to the default hands the title back to the heading.
-    state = workspaceReducer(state, {
-      type: "note/update",
-      id: note.id,
-      changes: { title: "Untitled note", autoTitle: true },
-    });
+    // Handing the title back to the heading applies it straight away.
+    state = workspaceReducer(state, { type: "note/update", id: note.id, changes: { autoTitle: true } });
+    expect(title()).toBe("Something else");
     edit("# Back to auto");
     expect(title()).toBe("Back to auto");
   });
@@ -246,44 +243,68 @@ describe("searchNotes", () => {
 });
 
 describe("mergeWorkspaces", () => {
-  const lastSavedAt = 100;
-  const note = (id: string, markdown: string, updatedAt: number) =>
+  const note = (id: string, markdown: string, updatedAt = 1) =>
     createNote({ id, title: id, markdown, createdAt: 1, updatedAt });
+  const workspace = (notes: ReturnType<typeof note>[], activeNoteId = notes[0]?.id ?? "") => ({
+    ...createWorkspace(),
+    notes,
+    activeNoteId,
+  });
+  const texts = (w: ReturnType<typeof mergeWorkspaces>) => w.notes.map((n) => `${n.id}:${n.markdown}`);
 
-  it("keeps this window's unsaved edits and notes while taking the other window's changes", () => {
-    const base = createWorkspace();
-    const local = {
-      ...base,
-      activeNoteId: "a",
-      notes: [note("a", "typed here", 150), note("b", "old", 50), note("new", "created here", 160)],
-    };
-    const incoming = {
-      ...base,
-      activeNoteId: "b",
-      settings: { ...base.settings, theme: "dark" as const },
-      notes: [note("a", "older copy", 120), note("b", "edited there", 140), note("c", "made there", 130)],
-    };
+  const a = note("a", "a");
+  const b = note("b", "b");
+  const base = workspace([a, b]);
 
-    const merged = mergeWorkspaces(local, incoming, lastSavedAt);
+  it("keeps edits and new notes from both copies", () => {
+    const local = workspace([{ ...a, markdown: "a typed here", updatedAt: 5 }, b, note("mine", "new here")]);
+    const incoming = workspace([a, { ...b, markdown: "b edited there" }, note("theirs", "new there")], "b");
 
-    expect(merged.notes.map((n) => n.markdown)).toEqual([
-      "typed here",
-      "edited there",
-      "made there",
-      "created here",
-    ]);
+    const merged = mergeWorkspaces(base, local, incoming);
+
+    expect(texts(merged)).toEqual(["a:a typed here", "b:b edited there", "mine:new here", "theirs:new there"]);
     expect(merged.activeNoteId).toBe("a");
-    expect(merged.settings.theme).toBe("dark");
   });
 
-  it("lets deletions and newer edits from the other window win over saved local notes", () => {
-    const base = createWorkspace();
-    const local = { ...base, activeNoteId: "gone", notes: [note("gone", "saved", 90), note("a", "mine", 150)] };
-    const incoming = { ...base, activeNoteId: "a", notes: [note("a", "theirs, newer", 170)] };
+  it("keeps a note restored here even though its timestamp is old", () => {
+    const savedAfterDelete = workspace([a]);
+    const local = workspace([a, b]); // b restored with Undo, unchanged since long ago
+    const incoming = workspace([{ ...a, markdown: "a edited there" }]);
 
-    const merged = mergeWorkspaces(local, incoming, lastSavedAt);
+    expect(texts(mergeWorkspaces(savedAfterDelete, local, incoming))).toEqual(["a:a edited there", "b:b"]);
+  });
 
-    expect(merged.notes.map((n) => n.markdown)).toEqual(["theirs, newer"]);
-    expect(merged.activeNoteId).toBe("a");
+  it("keeps deletions made in either copy", () => {
+    const deletedHere = mergeWorkspaces(base, workspace([a]), workspace([a, b]));
+    const deletedThere = mergeWorkspaces(base, workspace([a, b]), workspace([a]));
+
+    expect(texts(deletedHere)).toEqual(["a:a"]);
+    expect(texts(deletedThere)).toEqual(["a:a"]);
+  });
+
+  it("keeps a note edited here even if the other copy deleted it", () => {
+    const local = workspace([a, { ...b, markdown: "b typed here", updatedAt: 9 }]);
+
+    expect(texts(mergeWorkspaces(base, local, workspace([a])))).toEqual(["a:a", "b:b typed here"]);
+  });
+
+  it("lets the later edit win when both copies changed a note", () => {
+    const mine = { ...a, markdown: "mine", updatedAt: 5 };
+    const theirs = { ...a, markdown: "theirs", updatedAt: 7 };
+
+    expect(texts(mergeWorkspaces(base, workspace([mine, b]), workspace([theirs, b])))[0]).toBe("a:theirs");
+    expect(texts(mergeWorkspaces(base, workspace([{ ...mine, updatedAt: 8 }, b]), workspace([theirs, b])))[0]).toBe(
+      "a:mine",
+    );
+  });
+
+  it("merges settings key by key", () => {
+    const local = { ...base, settings: { ...base.settings, theme: "dark" as const } };
+    const incoming = { ...base, settings: { ...base.settings, tabLayout: "vertical" as const } };
+
+    const merged = mergeWorkspaces(base, local, incoming);
+
+    expect(merged.settings.theme).toBe("dark");
+    expect(merged.settings.tabLayout).toBe("vertical");
   });
 });

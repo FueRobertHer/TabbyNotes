@@ -45,9 +45,10 @@ import {
 import {
   createNote,
   DEFAULT_NOTE_TITLE,
-  mergeWorkspaces,
   workspaceReducer,
   type Note,
+  type Workspace,
+  type WorkspaceAction,
 } from "../../src/domain/workspace";
 import {
   loadWorkspace,
@@ -130,8 +131,32 @@ function downloadFile(filename: string, content: string, type = "text/markdown")
 }
 
 
+interface AppState {
+  workspace: Workspace;
+  /** Whether this copy has changes it hasn't written to storage yet. */
+  unsaved: boolean;
+}
+
+type AppAction = WorkspaceAction | { type: "app/saved"; workspace: Workspace };
+
+// Tracks unsaved changes next to the workspace so a save can't clear a change it didn't
+// include. Merging in another copy's save keeps the flag as it was: with nothing unsaved
+// here, the merge isn't written back, so copies don't trade saves back and forth.
+function appReducer(state: AppState, action: AppAction): AppState {
+  if (action.type === "app/saved") {
+    return state.workspace === action.workspace ? { ...state, unsaved: false } : state;
+  }
+  const workspace = workspaceReducer(state.workspace, action);
+  if (workspace === state.workspace) return state;
+  return { workspace, unsaved: action.type === "workspace/merge" ? state.unsaved : true };
+}
+
 export default function App() {
-  const [workspace, dispatch] = useReducer(workspaceReducer, null, () => loadWorkspace());
+  const [{ workspace, unsaved }, dispatchApp] = useReducer(appReducer, null, () => ({
+    workspace: loadWorkspace(),
+    unsaved: false,
+  }));
+  const dispatch = useCallback((action: WorkspaceAction) => dispatchApp(action), []);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
   const [storageUsed, setStorageUsed] = useState(() => storageUsage());
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -151,11 +176,12 @@ export default function App() {
   // Only read inside event handlers, so a ref avoids re-rendering on every close.
   const closedNotesRef = useRef<ClosedNote[]>([]);
   const workspaceRef = useRef(workspace);
-  // What storage holds, as far as this window knows, and when this window last wrote it.
-  // Comparing against it tells whether there are unsaved local edits.
+  // The last workspace this copy and storage agreed on: what it last saved or received.
+  // It's the base for merging another copy's save.
   const savedWorkspaceRef = useRef(workspace);
-  const lastSavedAtRef = useRef(Date.now());
   workspaceRef.current = workspace;
+  const unsavedStateRef = useRef(unsaved);
+  unsavedStateRef.current = unsaved;
 
   const activeNote = useMemo(
     () => workspace.notes.find((note) => note.id === workspace.activeNoteId) ?? workspace.notes[0],
@@ -163,12 +189,13 @@ export default function App() {
   );
 
   const persist = useCallback(() => {
-    // Nothing new to write, e.g. after picking up another window's save.
-    if (workspaceRef.current === savedWorkspaceRef.current) return;
+    // Nothing changed here, e.g. only another copy's save was merged in.
+    if (!unsavedStateRef.current) return;
+    const saving = workspaceRef.current;
     try {
-      saveWorkspace(workspaceRef.current);
-      savedWorkspaceRef.current = workspaceRef.current;
-      lastSavedAtRef.current = Date.now();
+      saveWorkspace(saving);
+      savedWorkspaceRef.current = saving;
+      dispatchApp({ type: "app/saved", workspace: saving });
       setSaveStatus("saved");
       setStorageUsed(storageUsage());
     } catch {
@@ -196,20 +223,16 @@ export default function App() {
   }, [persist]);
 
   // The popup, a standalone window and the side panel can be open at once. Pick up what
-  // another one saved. Edits made here but not yet saved are merged in rather than lost,
-  // and each copy stays on its own active note.
+  // another one saved with a three-way merge, so changes made here but not yet saved
+  // survive, and each copy stays on its own active note.
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
       if (event.key !== WORKSPACE_KEY || event.newValue === null) return;
       const incoming = loadWorkspace();
-      const local = workspaceRef.current;
-      const hasUnsavedEdits = local !== savedWorkspaceRef.current;
-      const next = mergeWorkspaces(local, incoming, hasUnsavedEdits ? lastSavedAtRef.current : Infinity);
-      // Without local edits this is what storage holds (apart from the active note, which
-      // isn't worth a write), so don't save it back and set off the other window again.
-      if (!hasUnsavedEdits) savedWorkspaceRef.current = next;
-      workspaceRef.current = next;
-      dispatch({ type: "workspace/replace", workspace: next });
+      const base = savedWorkspaceRef.current;
+      savedWorkspaceRef.current = incoming;
+      dispatchApp({ type: "workspace/merge", base, incoming });
+      setStorageUsed(storageUsage());
     };
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
@@ -591,7 +614,7 @@ export default function App() {
             }
             onBlur={(event) => {
               if (!event.target.value.trim()) {
-                dispatch({ type: "note/update", id: activeNote.id, changes: { title: DEFAULT_NOTE_TITLE, autoTitle: true } });
+                dispatch({ type: "note/update", id: activeNote.id, changes: { autoTitle: true } });
               }
             }}
             onKeyDown={(event) => {

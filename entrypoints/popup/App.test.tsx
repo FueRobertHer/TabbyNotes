@@ -19,6 +19,19 @@ function seed(notes = [createNote({ title: "First" }), createNote({ title: "Seco
   return notes;
 }
 
+// Simulates another open copy (window or side panel) saving the given notes.
+function saveFromOtherCopy(notes: ReturnType<typeof createNote>[]) {
+  seed(notes);
+  act(() => {
+    window.dispatchEvent(
+      new StorageEvent("storage", { key: WORKSPACE_KEY, newValue: window.localStorage.getItem(WORKSPACE_KEY) }),
+    );
+  });
+}
+
+const storedTitles = () =>
+  JSON.parse(window.localStorage.getItem(WORKSPACE_KEY)!).notes.map((note: { title: string }) => note.title);
+
 describe("App", () => {
   beforeEach(() => window.localStorage.clear());
   afterEach(() => window.localStorage.clear());
@@ -169,5 +182,46 @@ describe("App", () => {
     expect(screen.getByRole("tab", { name: "Renamed there" })).toBeInTheDocument();
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(window.localStorage.getItem(WORKSPACE_KEY)).toBe(theirs);
+  });
+
+  it("keeps a tab restored with Undo when another copy saves before this one does", async () => {
+    const [first, second] = seed();
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Close Second" }));
+    await waitFor(() => expect(storedTitles()).toEqual(["First"]));
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    saveFromOtherCopy([{ ...first!, title: "First edited there", updatedAt: Date.now() }]);
+
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["First edited there", "Second"]);
+    await waitFor(() => expect(storedTitles()).toEqual(["First edited there", "Second"]));
+    expect(second).toBeDefined();
+  });
+
+  it("keeps a tab closed here closed when another copy saves before this one does", async () => {
+    const [first, second] = seed();
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Close Second" }));
+    saveFromOtherCopy([first!, second!]);
+
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["First"]);
+    await waitFor(() => expect(storedTitles()).toEqual(["First"]));
+  });
+
+  it("drops a note the other copy deleted even while this copy has unsaved typing", async () => {
+    const [first, second] = seed();
+    const user = userEvent.setup();
+    render(<App />);
+
+    saveFromOtherCopy([first!, { ...second!, title: "Second edited there", updatedAt: Date.now() }]);
+    const title = screen.getByRole("textbox", { name: "Note title" });
+    await user.type(title, "!");
+    saveFromOtherCopy([first!]);
+
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["First!"]);
+    await waitFor(() => expect(storedTitles()).toEqual(["First!"]));
   });
 });

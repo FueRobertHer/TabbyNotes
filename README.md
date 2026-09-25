@@ -23,7 +23,7 @@ TabbyNotes has no account, cloud sync, analytics, content scripts, or access to 
 - Obsidian-style live preview keeps Markdown formatted and editable in one surface, including tables, images and syntax-colored code blocks.
 - Markdown syntax appears on the active line; a Source setting shows the raw document.
 - Tabs can sit horizontally above the editor or in a vertical rail. Double-click a tab to rename it.
-- Open TabbyNotes in the browser side panel or a resizable window when the toolbar popup feels cramped. Open copies stay in sync.
+- Open TabbyNotes in the browser side panel or a resizable window when the toolbar popup feels cramped. Open copies stay in sync; if two copies edit the same note at once, the later edit wins.
 - Ctrl/⌘ P jumps to any note, Ctrl/⌘ F finds and replaces, and Alt+Shift+N opens TabbyNotes. Settings lists every shortcut.
 - Closed tabs can be restored with Undo or Ctrl/⌘ Shift T.
 - Markdown import/export, plus JSON backups that restore every tab exactly.
