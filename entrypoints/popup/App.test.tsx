@@ -91,6 +91,25 @@ describe("App", () => {
     ]);
   });
 
+  it("adds a note with Alt+N and switches tabs with Alt+] and Alt+[", async () => {
+    seed();
+    const user = userEvent.setup();
+    render(<App />);
+    const selected = () => screen.getAllByRole("tab").find((tab) => tab.getAttribute("aria-selected") === "true")?.textContent;
+    const start = selected();
+
+    await user.keyboard("{Alt>}[KeyN]{/Alt}");
+    expect(screen.getAllByRole("tab")).toHaveLength(3);
+    const added = selected();
+    expect(["First", "Second"]).not.toContain(added);
+
+    await user.keyboard("{Alt>}[BracketRight]{/Alt}");
+    expect(selected()).toBe("First");
+    await user.keyboard("{Alt>}[BracketLeft]{/Alt}");
+    expect(selected()).toBe(added);
+    expect(start).not.toBe(added);
+  });
+
   it("jumps to a note from the Ctrl+P switcher", async () => {
     seed([
       createNote({ title: "First" }),
