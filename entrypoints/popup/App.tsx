@@ -5,6 +5,7 @@ import {
   DatabaseBackup,
   Download,
   FileDown,
+  FileSearch,
   FileText,
   Heading2,
   Import,
@@ -59,6 +60,7 @@ import {
 
 import Dialog from "./Dialog";
 import type { MarkdownEditorHandle } from "./MarkdownEditor";
+import QuickSwitcher from "./QuickSwitcher";
 
 const MarkdownEditor = lazy(() => import("./MarkdownEditor"));
 
@@ -117,6 +119,7 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
   const [storageUsed, setStorageUsed] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Note | null>(null);
   const [pendingReset, setPendingReset] = useState(false);
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
@@ -221,7 +224,10 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [undoToastNote]);
 
-  const anyDialogOpen = settingsOpen || pendingDelete !== null || pendingReset;
+  const anyDialogOpen = settingsOpen || switcherOpen || pendingDelete !== null || pendingReset;
+
+  // The editor remounts when the active note changes, so focus it after that render.
+  const focusEditorSoon = () => window.requestAnimationFrame(() => editorRef.current?.focus());
 
   useEffect(() => {
     // A dialog owns the keyboard while open; don't create/switch notes behind it.
@@ -231,6 +237,10 @@ export default function App() {
       if (modifier && !event.shiftKey && event.key.toLowerCase() === "n") {
         event.preventDefault();
         addNote();
+      }
+      if (modifier && !event.shiftKey && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        setSwitcherOpen(true);
       }
       // Inside the editor CodeMirror handles this itself; from elsewhere, open its search.
       if (modifier && !event.shiftKey && event.key.toLowerCase() === "f" && !event.defaultPrevented) {
@@ -350,6 +360,9 @@ export default function App() {
             {saveStatus === "saved" ? <Check size={11} /> : <span className="h-2 w-2 rounded-full bg-red-500" />}
             {saveStatus === "saved" ? "Saved" : "Save failed"}
           </p>
+          <button className="icon-button" onClick={() => setSwitcherOpen(true)} aria-label="Go to note" title="Go to note (Ctrl/⌘ P)">
+            <FileSearch size={16} />
+          </button>
           {!isWindowView() && (
             <button className="icon-button" onClick={openInWindow} aria-label="Open in a resizable window" title="Open in a resizable window">
               <Maximize2 size={16} />
@@ -654,6 +667,22 @@ export default function App() {
             </p>
           </div>
         </Dialog>
+      )}
+
+      {switcherOpen && (
+        <QuickSwitcher
+          notes={workspace.notes}
+          activeNoteId={activeNote.id}
+          onSelect={(id) => {
+            dispatch({ type: "note/activate", id });
+            setSwitcherOpen(false);
+            focusEditorSoon();
+          }}
+          onClose={() => {
+            setSwitcherOpen(false);
+            focusEditorSoon();
+          }}
+        />
       )}
 
       {pendingDelete && (

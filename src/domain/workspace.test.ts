@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createNote, createWorkspace, workspaceReducer } from "./workspace";
+import { createNote, createWorkspace, searchNotes, workspaceReducer } from "./workspace";
 
 describe("workspaceReducer", () => {
   it("creates and activates a new note", () => {
@@ -160,5 +160,28 @@ describe("workspaceReducer", () => {
     const state = createWorkspace();
     const incoming = createWorkspace();
     expect(workspaceReducer(state, { type: "workspace/replace", workspace: incoming })).toBe(incoming);
+  });
+});
+
+describe("searchNotes", () => {
+  const groceries = createNote({ title: "Groceries", markdown: "milk, eggs and bread", updatedAt: 1 });
+  const trip = createNote({ title: "Trip plan", markdown: "Pack the tent and buy groceries on the way", updatedAt: 3 });
+  const recipes = createNote({ title: "Recipes", markdown: "Bread: flour, water, salt", updatedAt: 2 });
+  const notes = [groceries, trip, recipes];
+
+  it("lists every note, most recently edited first, for an empty query", () => {
+    expect(searchNotes(notes, "  ").map(({ note }) => note.title)).toEqual(["Trip plan", "Recipes", "Groceries"]);
+  });
+
+  it("ranks title matches above body matches and adds body snippets", () => {
+    const results = searchNotes(notes, "groc");
+    expect(results.map(({ note }) => note.title)).toEqual(["Groceries", "Trip plan"]);
+    expect(results[0]?.snippet).toBeUndefined();
+    expect(results[1]?.snippet).toContain("buy groceries");
+  });
+
+  it("requires every word to match the title or body", () => {
+    expect(searchNotes(notes, "bread flour").map(({ note }) => note.title)).toEqual(["Recipes"]);
+    expect(searchNotes(notes, "bread tent")).toEqual([]);
   });
 });

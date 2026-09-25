@@ -155,3 +155,43 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
       return action.workspace;
   }
 }
+
+export interface NoteSearchResult {
+  note: Note;
+  /** Text around the first body match, when the query matched the body rather than the title. */
+  snippet?: string;
+}
+
+const SNIPPET_RADIUS = 40;
+
+/**
+ * Finds notes whose title or body contains every word of the query (case-insensitive).
+ * Title matches rank first. An empty query lists every note, most recently edited first.
+ */
+export function searchNotes(notes: Note[], query: string): NoteSearchResult[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) {
+    return [...notes].sort((a, b) => b.updatedAt - a.updatedAt).map((note) => ({ note }));
+  }
+
+  const ranked: { result: NoteSearchResult; rank: number }[] = [];
+  for (const note of notes) {
+    const title = note.title.toLowerCase();
+    const body = note.markdown.toLowerCase();
+    if (!words.every((word) => title.includes(word) || body.includes(word))) continue;
+
+    const titleHits = words.filter((word) => title.includes(word)).length;
+    const bodyWord = words.find((word) => !title.includes(word)) ?? (titleHits === 0 ? words[0] : undefined);
+    let snippet: string | undefined;
+    if (bodyWord) {
+      const at = body.indexOf(bodyWord);
+      const start = Math.max(0, at - SNIPPET_RADIUS);
+      const end = Math.min(note.markdown.length, at + bodyWord.length + SNIPPET_RADIUS);
+      snippet = `${start > 0 ? "…" : ""}${note.markdown.slice(start, end).replace(/\s+/g, " ").trim()}${end < note.markdown.length ? "…" : ""}`;
+    }
+    const rank = (title.startsWith(words[0] ?? "") ? 2 : 0) + (titleHits === words.length ? 2 : titleHits > 0 ? 1 : 0);
+    ranked.push({ result: snippet ? { note, snippet } : { note }, rank });
+  }
+  // Array.prototype.sort is stable, so equal ranks keep tab order.
+  return ranked.sort((a, b) => b.rank - a.rank).map(({ result }) => result);
+}

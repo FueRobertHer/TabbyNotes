@@ -77,4 +77,21 @@ describe("App", () => {
       "hello",
     ]);
   });
+
+  it("jumps to a note from the Ctrl+P switcher", async () => {
+    seed([
+      createNote({ title: "First" }),
+      createNote({ title: "Recipes", markdown: "Bread needs flour" }),
+    ]);
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.keyboard("{Control>}p{/Control}");
+    await user.type(screen.getByRole("combobox", { name: "Search notes" }), "flour");
+    expect(screen.getByRole("option", { name: /Recipes/ })).toHaveTextContent("Bread needs flour");
+    await user.keyboard("{Enter}");
+
+    expect(screen.queryByRole("dialog", { name: "Go to note" })).toBeNull();
+    expect(screen.getByRole("tab", { name: "Recipes" })).toHaveAttribute("aria-selected", "true");
+  });
 });
