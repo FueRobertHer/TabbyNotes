@@ -20,11 +20,18 @@ TabbyNotes has no account, cloud sync, analytics, content scripts, or access to 
 
 ## Highlights
 
-- Obsidian-style live preview keeps Markdown formatted and editable in one surface.
+- Obsidian-style live preview keeps Markdown formatted and editable in one surface, including tables, images and syntax-colored code blocks.
 - Markdown syntax appears on the active line; a Source setting shows the raw document.
-- Tabs can sit horizontally above the editor or in a vertical rail.
-- Keyboard tab navigation, drag reordering, Markdown import/export, and light/dark themes.
-- Open in a resizable window when the toolbar popup feels cramped.
+- Tabs can sit horizontally above the editor or in a vertical rail. Double-click a tab to rename it.
+- Open TabbyNotes in the browser side panel or a resizable window when the toolbar popup feels cramped. Open copies stay in sync.
+- Ctrl/⌘ P jumps to any note, Ctrl/⌘ F finds and replaces, and Alt+Shift+N opens TabbyNotes. Settings lists every shortcut.
+- Closed tabs can be restored with Undo or Ctrl/⌘ Shift T.
+- Markdown import/export, plus JSON backups that restore every tab exactly.
+- Light and dark themes.
+
+## Permissions
+
+TabbyNotes asks for no permissions in Firefox. In Chrome it requests only `sidePanel`, which shows no install warning. Images in notes load from wherever their URL points, without sending a referrer.
 
 ## Toolchain
 

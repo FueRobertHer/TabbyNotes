@@ -10,9 +10,11 @@ import {
 } from "../domain/workspace";
 
 // Storage intentionally uses window.localStorage rather than chrome.storage.local.
-// The popup is the only surface that reads or writes the workspace, so the synchronous
+// Only the extension's own pages (popup, standalone window, side panel) read or write the
+// workspace, and they share this origin's localStorage. The synchronous
 // localStorage API keeps load/save simple (no async loading state) and, crucially, needs
-// no "storage" permission — preserving the extension's zero-permission privacy posture.
+// no "storage" permission, keeping the permission list minimal (none in Firefox; only
+// the warning-free "sidePanel" in Chrome).
 // The tradeoffs (smaller quota, main-thread writes) are mitigated by debouncing saves in
 // the popup. Revisit chrome.storage only if a background/service-worker surface ever needs
 // the data or the quota becomes limiting.
