@@ -41,6 +41,8 @@ declare global {
   interface Window {
     /** Set on the standalone window's page so other extension pages can find and focus it. */
     tabbyWindowId?: number;
+    /** Set on the standalone window's page; shows its "Import notes" prompt. */
+    tabbyShowImport?: () => void;
   }
 }
 
@@ -54,8 +56,8 @@ export function registerStandaloneWindow(): void {
   );
 }
 
-/** The browser window ID of an open standalone TabbyNotes window, if there is one. */
-export function openStandaloneWindowId(): number | undefined {
+/** The page of an open standalone TabbyNotes window, if there is one. */
+function standaloneWindowPage(): Window | undefined {
   let views: Window[];
   try {
     // Every extension page open in a tab or window; same origin, so their globals are readable.
@@ -64,27 +66,33 @@ export function openStandaloneWindowId(): number | undefined {
   } catch {
     return undefined;
   }
-  for (const view of views) {
-    if (view !== window && view.document.documentElement.dataset.view === "window" && view.tabbyWindowId !== undefined) {
-      return view.tabbyWindowId;
-    }
-  }
-  return undefined;
+  return views.find(
+    (view) => view !== window && view.document.documentElement.dataset.view === "window" && view.tabbyWindowId !== undefined,
+  );
+}
+
+/** The browser window ID of an open standalone TabbyNotes window, if there is one. */
+export function openStandaloneWindowId(): number | undefined {
+  return standaloneWindowPage()?.tabbyWindowId;
 }
 
 export async function focusWindow(windowId: number): Promise<void> {
   await browser.windows.update(windowId, { focused: true });
 }
 
-/** Opens the standalone window, or brings the existing one forward so there's only ever one. */
-export async function openStandaloneWindow(): Promise<void> {
-  const existing = openStandaloneWindowId();
-  if (existing !== undefined) {
-    await focusWindow(existing);
+/**
+ * Opens the standalone window, or brings the existing one forward so there's only ever one.
+ * With `showImport`, the window greets you with its "Import notes" prompt.
+ */
+export async function openStandaloneWindow({ showImport = false } = {}): Promise<void> {
+  const existing = standaloneWindowPage();
+  if (existing?.tabbyWindowId !== undefined) {
+    if (showImport) existing.tabbyShowImport?.();
+    await focusWindow(existing.tabbyWindowId);
     return;
   }
   await browser.windows.create({
-    url: browser.runtime.getURL("/popup.html?view=window"),
+    url: browser.runtime.getURL(`/popup.html?view=window${showImport ? "&import=1" : ""}`),
     type: "popup",
     width: 1000,
     height: 760,

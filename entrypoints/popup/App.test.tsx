@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createNote } from "../../src/domain/workspace";
 import { serializeBackup, WORKSPACE_KEY } from "../../src/lib/workspace-storage";
@@ -82,13 +82,42 @@ describe("App", () => {
       new File(["# Hi"], "hello.md", { type: "text/markdown" }),
     ]);
 
-    await screen.findByText("Imported 2 notes");
+    await screen.findByText("Imported 2 notes. 1 was already here.");
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
       "First",
       "Second",
       "From backup",
       "hello",
     ]);
+
+    // Importing the same backup again says so, rather than "Imported 0 notes".
+    await user.upload(input, new File([backup], "backup.json", { type: "application/json" }));
+    await screen.findByText("Nothing new to import: all 2 notes are already here.");
+    expect(screen.getAllByRole("tab")).toHaveLength(4);
+  });
+
+  it("greets the window opened by the popup's Import button with a file prompt", async () => {
+    seed();
+    document.documentElement.dataset.view = "window";
+    window.history.replaceState(null, "", "/popup.html?view=window&import=1");
+    try {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      expect(screen.getByRole("dialog", { name: "Import notes" })).toBeInTheDocument();
+      expect(window.location.search).toBe("?view=window");
+
+      const input = container.querySelector<HTMLInputElement>("input[type='file']")!;
+      const pickFiles = vi.spyOn(input, "click");
+      await user.click(screen.getByRole("button", { name: "Choose files" }));
+      expect(pickFiles).toHaveBeenCalledOnce();
+
+      await user.upload(input, new File(["# Hi"], "hello.md", { type: "text/markdown" }));
+      await screen.findByText("Imported 1 note.");
+      expect(screen.queryByRole("dialog", { name: "Import notes" })).toBeNull();
+    } finally {
+      delete document.documentElement.dataset.view;
+      window.history.replaceState(null, "", "/");
+    }
   });
 
   it("adds a note with Alt+N and switches tabs with Alt+] and Alt+[", async () => {
