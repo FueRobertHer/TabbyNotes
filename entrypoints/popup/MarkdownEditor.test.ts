@@ -1,6 +1,7 @@
 import { syntaxTree } from "@codemirror/language";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
+import { search } from "@codemirror/search";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -130,5 +131,23 @@ describe("Markdown editor keyboard shortcuts", () => {
 
     press(true);
     expect(view.state.doc.toString()).toBe("- parent\n- child");
+  });
+
+  it("opens find and replace with Ctrl/Cmd+F", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    view = new EditorView({ parent, doc: "find me", extensions: [search(), tabbyEditingKeymap] });
+    const usesCommand = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+    const event = new KeyboardEvent("keydown", {
+      key: "f",
+      metaKey: usesCommand,
+      ctrlKey: !usesCommand,
+      bubbles: true,
+      cancelable: true,
+    });
+    view.contentDOM.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(parent.querySelector(".cm-search")).not.toBeNull();
   });
 });

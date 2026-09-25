@@ -841,6 +841,89 @@ input:focus-visible {
   width: 100%;
 }
 
+/* CodeMirror's find and replace panel, restyled to follow the theme. */
+.cm-editor .cm-panels {
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+
+.cm-editor .cm-panels-top {
+  border-bottom: 1px solid var(--line);
+}
+
+.cm-editor .cm-search {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 11px;
+  gap: 4px 6px;
+  padding: 8px 36px 8px 22px;
+}
+
+.cm-editor .cm-search br {
+  display: none;
+}
+
+.cm-editor .cm-search label {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  gap: 4px;
+}
+
+.cm-editor .cm-search input[type="checkbox"] {
+  accent-color: var(--accent-strong);
+  margin: 0;
+}
+
+.cm-editor .cm-textfield {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  color: var(--ink);
+  font-size: 12px;
+  margin: 0;
+  padding: 3px 7px;
+}
+
+.cm-editor .cm-textfield:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.cm-editor .cm-button {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 11px;
+  margin: 0;
+  padding: 3px 8px;
+}
+
+.cm-editor .cm-button:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.cm-editor .cm-panel.cm-search [name="close"] {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+  right: 10px;
+  top: 6px;
+}
+
+.cm-editor .cm-searchMatch {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 2px;
+}
+
+.cm-editor .cm-searchMatch-selected {
+  background: color-mix(in srgb, var(--accent-strong) 55%, transparent);
+}
+
 .cm-editor .cm-selectionBackground,
 .cm-editor.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground {
   background-color: var(--selection) !important;

@@ -18,6 +18,7 @@ import {
   Plus,
   Quote,
   RotateCcw,
+  Search,
   Settings,
   SquareCode,
   Sparkles,
@@ -230,6 +231,11 @@ export default function App() {
       if (modifier && !event.shiftKey && event.key.toLowerCase() === "n") {
         event.preventDefault();
         addNote();
+      }
+      // Inside the editor CodeMirror handles this itself; from elsewhere, open its search.
+      if (modifier && !event.shiftKey && event.key.toLowerCase() === "f" && !event.defaultPrevented) {
+        event.preventDefault();
+        editorRef.current?.openSearch();
       }
       if (modifier && event.shiftKey && event.key.toLowerCase() === "t") {
         event.preventDefault();
@@ -517,7 +523,10 @@ export default function App() {
               <Icon size={15} />
             </button>
           ))}
-          <span className="ml-auto hidden items-center gap-1.5 text-[10px] font-semibold tracking-wide text-[var(--muted)] uppercase sm:flex">
+          <button className="format-button ml-auto" onClick={() => editorRef.current?.openSearch()} title="Find and replace (Ctrl/⌘ F)" aria-label="Find and replace">
+            <Search size={15} />
+          </button>
+          <span className="hidden items-center gap-1.5 text-[10px] font-semibold tracking-wide text-[var(--muted)] uppercase sm:flex">
             {workspace.settings.editorStyle === "live" ? <Sparkles size={12} /> : <Code2 size={12} />}
             {workspace.settings.editorStyle === "live" ? "Live preview" : "Markdown source"}
           </span>

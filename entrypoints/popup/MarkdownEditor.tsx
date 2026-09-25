@@ -1,6 +1,7 @@
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
 import { Compartment, type Extension } from "@codemirror/state";
 import {
   type Command,
@@ -107,7 +108,12 @@ export const tabbyHistoryKeymap = historyKeymap.filter(
 
 // Tab and Shift+Tab indent and outdent (e.g. to nest list items). Pressing Escape
 // first lets Tab move focus out of the editor, as CodeMirror does by default.
-export const tabbyEditingKeymap = keymap.of([...defaultKeymap, ...tabbyHistoryKeymap, indentWithTab]);
+export const tabbyEditingKeymap = keymap.of([
+  ...defaultKeymap,
+  ...tabbyHistoryKeymap,
+  ...searchKeymap,
+  indentWithTab,
+]);
 
 export const tabbyMarkdown = markdown({
   base: markdownLanguage,
@@ -152,6 +158,7 @@ export interface MarkdownEditorHandle {
   wrapSelection: (before: string, after: string, placeholder: string) => void;
   prefixLine: (prefix: string, placeholder: string) => void;
   insert: (text: string) => void;
+  openSearch: () => void;
 }
 
 interface MarkdownEditorProps {
@@ -192,6 +199,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
           highlightSpecialChars(),
           history(),
           drawSelection(),
+          search({ top: true }),
           syntaxHighlighting(tabbyHighlightStyle),
           markdownFormattingKeymap,
           tabbyEditingKeymap,
@@ -277,6 +285,10 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
         if (!view) return;
         toggleLinePrefixCommand(prefix, placeholder)(view);
         view.focus();
+      },
+      openSearch() {
+        const view = viewRef.current;
+        if (view) openSearchPanel(view);
       },
       insert(text) {
         const view = viewRef.current;
