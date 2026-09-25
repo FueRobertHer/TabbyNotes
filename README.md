@@ -67,6 +67,25 @@ bun run build:firefox
 
 `bun run typecheck` invokes the Go-based TypeScript 7 `tsc` compiler. WXT builds Chrome and Firefox Manifest V3 packages from the same source.
 
+## Building for release
+
+Requirements: Bun 1.4.2 or newer and Node.js 24 or newer. These steps work from a clean checkout or from the extracted sources zip.
+
+```sh
+bun install --frozen-lockfile
+bun run zip:firefox
+```
+
+This builds in production mode and writes to `.output/`:
+
+- `tabby-notes-<version>-firefox.zip`: the package to upload to Firefox Add-ons.
+- `tabby-notes-<version>-sources.zip`: the source code Firefox Add-ons asks for. Building it with the two commands above reproduces the same extension.
+- `firefox-mv3/`: the unpacked extension, matching the contents of the Firefox zip.
+
+For Chrome, run `bun run zip` to get `tabby-notes-<version>-chrome.zip`.
+
+To release a new version, change `version` in `package.json` (the manifest reads it from there), then run the commands above.
+
 ## Privacy and persistence
 
 The extension requests no permissions. Notes are persisted through the extension page's standard `localStorage`; this data is local to the browser profile and is removed when the extension is uninstalled. Existing v4 data under the `saveState` key is migrated on first launch and retained as a recovery backup.
