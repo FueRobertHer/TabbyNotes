@@ -3,7 +3,13 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirro
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
-import { Compartment, type Extension } from "@codemirror/state";
+import {
+  Annotation,
+  Compartment,
+  type ChangeSpec,
+  type Extension,
+  Transaction,
+} from "@codemirror/state";
 import {
   type Command,
   drawSelection,
@@ -169,6 +175,25 @@ export const tabbyHighlightStyle = HighlightStyle.define([
   { tag: [tags.propertyName, tags.attributeName], color: "var(--syntax-property)" },
 ]);
 
+// Marks edits that came from outside the editor (e.g. another window saving), so they
+// aren't echoed back through onChange or added to this editor's undo history.
+const externalChange = Annotation.define<boolean>();
+
+/** The smallest single change turning `current` into `next`: only the differing middle. */
+export function minimalChange(current: string, next: string): ChangeSpec {
+  let start = 0;
+  const shortest = Math.min(current.length, next.length);
+  while (start < shortest && current.charCodeAt(start) === next.charCodeAt(start)) start += 1;
+  let end = 0;
+  while (
+    end < shortest - start &&
+    current.charCodeAt(current.length - 1 - end) === next.charCodeAt(next.length - 1 - end)
+  ) {
+    end += 1;
+  }
+  return { from: start, to: current.length - end, insert: next.slice(start, next.length - end) };
+}
+
 const SANS_FONT_STACK =
   'Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 const MONO_FONT_STACK = '"DM Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace';
@@ -246,7 +271,10 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
             spellcheck: "true",
           }),
           EditorView.updateListener.of((update) => {
-            if (update.docChanged) {
+            const fromOutside = update.transactions.some((transaction) =>
+              transaction.annotation(externalChange),
+            );
+            if (update.docChanged && !fromOutside) {
               onChangeRef.current(update.state.doc.toString());
             }
           }),
@@ -296,12 +324,16 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
 
     // Reflect external document changes without clobbering local edits. When the
     // change originated from this editor, the doc already matches and we skip it.
+    // Replacing only the differing span keeps the cursor and scroll position in place.
     useEffect(() => {
       const view = viewRef.current;
       if (!view) return;
       const current = view.state.doc.toString();
       if (initialValue !== current) {
-        view.dispatch({ changes: { from: 0, to: current.length, insert: initialValue } });
+        view.dispatch({
+          changes: minimalChange(current, initialValue),
+          annotations: [externalChange.of(true), Transaction.addToHistory.of(false)],
+        });
       }
     }, [initialValue]);
 

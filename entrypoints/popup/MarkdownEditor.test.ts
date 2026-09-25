@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   markdownFormattingKeymap,
+  minimalChange,
   pasteUrlAsLink,
   tabbyEditingKeymap,
   tabbyHistoryKeymap,
@@ -172,5 +173,17 @@ describe("Markdown editor keyboard shortcuts", () => {
     // Otherwise CodeMirror's own paste handling applies, which never builds a link.
     if (expected) expect(view.state.doc.toString()).toBe(expected);
     else expect(view.state.doc.toString()).not.toContain("](");
+  });
+
+  it.each([
+    ["hello world", "hello brave world", { from: 6, to: 6, insert: "brave " }],
+    ["aaa", "aa", { from: 2, to: 3, insert: "" }],
+    ["same", "same", { from: 4, to: 4, insert: "" }],
+    ["", "new", { from: 0, to: 0, insert: "new" }],
+    ["abc", "xyz", { from: 0, to: 3, insert: "xyz" }],
+  ])("replaces only the changed span of %j", (current, next, expected) => {
+    const change = minimalChange(current, next);
+    expect(change).toEqual(expected);
+    expect(EditorState.create({ doc: current }).update({ changes: change }).state.doc.toString()).toBe(next);
   });
 });

@@ -107,4 +107,21 @@ describe("App", () => {
 
     expect(screen.getByRole("tab", { name: "Renamed" })).toHaveAttribute("aria-selected", "true");
   });
+
+  it("picks up changes saved by another TabbyNotes window", async () => {
+    const [first, second] = seed();
+    render(<App />);
+
+    const saved = seed([first!, { ...second!, title: "Renamed elsewhere" }]);
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: WORKSPACE_KEY,
+          newValue: window.localStorage.getItem(WORKSPACE_KEY),
+        }),
+      );
+    });
+
+    expect(screen.getByRole("tab", { name: saved[1]!.title })).toBeInTheDocument();
+  });
 });
