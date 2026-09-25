@@ -78,6 +78,16 @@ const UNDO_TOAST_MS = 6000;
 const STORAGE_SHOW_AT = 0.5;
 const STORAGE_WARN_AT = 0.85;
 
+const keyboardShortcuts = [
+  ["Open TabbyNotes", "Alt Shift N"],
+  ["New note", "Ctrl/⌘ N"],
+  ["Go to note", "Ctrl/⌘ P"],
+  ["Find and replace", "Ctrl/⌘ F"],
+  ["Reopen closed tab", "Ctrl/⌘ Shift T"],
+  ["Next / previous tab", "Ctrl Tab / Ctrl Shift Tab"],
+  ["Indent / outdent", "Tab / Shift Tab"],
+] as const;
+
 const formattingActions = [
   { label: "Bold", shortcut: "Ctrl/⌘ B", icon: Bold, run: (editor: MarkdownEditorHandle) => editor.wrapSelection("**", "**", "bold text") },
   { label: "Italic", shortcut: "Ctrl/⌘ I", icon: Italic, run: (editor: MarkdownEditorHandle) => editor.wrapSelection("_", "_", "italic text") },
@@ -652,6 +662,17 @@ export default function App() {
                 <button className="settings-action" onClick={exportAll}><Download size={15} />Export all (.md)</button>
                 <button className="settings-action" onClick={backUpAll}><DatabaseBackup size={15} />Back up (.json)</button>
               </div>
+            </SettingGroup>
+
+            <SettingGroup title="Keyboard shortcuts" description="Change the shortcut that opens TabbyNotes in your browser's extension shortcut settings.">
+              <dl className="shortcut-list">
+                {keyboardShortcuts.map(([action, keys]) => (
+                  <div key={action}>
+                    <dt>{action}</dt>
+                    <dd><kbd>{keys}</kbd></dd>
+                  </div>
+                ))}
+              </dl>
             </SettingGroup>
 
             <SettingGroup title="Safety" description="Ask before closing a tab. Closed tabs can be reopened with Ctrl/⌘ Shift T.">
