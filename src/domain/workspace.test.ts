@@ -126,4 +126,10 @@ describe("workspaceReducer", () => {
     expect(next.settings.editorStyle).toBe("source");
     expect(next.settings.tabLayout).toBe("vertical");
   });
+
+  it("replaces the whole workspace, e.g. when another window saved changes", () => {
+    const state = createWorkspace();
+    const incoming = createWorkspace();
+    expect(workspaceReducer(state, { type: "workspace/replace", workspace: incoming })).toBe(incoming);
+  });
 });

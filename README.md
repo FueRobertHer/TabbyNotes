@@ -24,6 +24,7 @@ TabbyNotes has no account, cloud sync, analytics, content scripts, or access to 
 - Markdown syntax appears on the active line; a Source setting shows the raw document.
 - Tabs can sit horizontally above the editor or in a vertical rail.
 - Keyboard tab navigation, drag reordering, Markdown import/export, and light/dark themes.
+- Open in a resizable window when the toolbar popup feels cramped.
 
 ## Toolchain
 

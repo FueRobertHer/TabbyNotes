@@ -1,6 +1,6 @@
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { Compartment, type Extension } from "@codemirror/state";
 import {
   type Command,
@@ -15,6 +15,7 @@ import {
   useImperativeHandle,
   useRef,
 } from "react";
+import { tags } from "@lezer/highlight";
 import { backtickFencedCode } from "./BacktickFencedCode";
 import { livePreview } from "./LivePreview";
 
@@ -109,6 +110,21 @@ export const tabbyMarkdown = markdown({
   extensions: backtickFencedCode,
 });
 
+// CodeMirror's defaultHighlightStyle hardcodes light-theme colors (e.g. dark blue
+// URLs and code fence info strings) that are unreadable on the dark theme. These
+// rules use the app's CSS variables so they follow the active theme.
+export const tabbyHighlightStyle = HighlightStyle.define([
+  { tag: tags.heading, fontWeight: "bold" },
+  { tag: tags.emphasis, fontStyle: "italic" },
+  { tag: tags.strong, fontWeight: "bold" },
+  { tag: tags.strikethrough, textDecoration: "line-through" },
+  { tag: tags.link, color: "var(--accent-strong)", textDecoration: "underline" },
+  { tag: tags.url, color: "var(--accent-strong)" },
+  { tag: [tags.labelName, tags.processingInstruction, tags.contentSeparator, tags.meta], color: "var(--muted)" },
+  { tag: tags.quote, color: "var(--muted)" },
+  { tag: tags.invalid, color: "#d85b4b" },
+]);
+
 const SANS_FONT_STACK =
   'Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 const MONO_FONT_STACK = '"DM Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace';
@@ -172,7 +188,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
           highlightSpecialChars(),
           history(),
           drawSelection(),
-          syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+          syntaxHighlighting(tabbyHighlightStyle),
           markdownFormattingKeymap,
           keymap.of([...defaultKeymap, ...tabbyHistoryKeymap]),
           tabbyMarkdown,

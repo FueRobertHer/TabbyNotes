@@ -33,7 +33,8 @@ export type WorkspaceAction =
   | { type: "note/activate"; id: string }
   | { type: "note/reorder"; sourceId: string; targetId: string; edge?: "before" | "after" }
   | { type: "notes/replace"; notes: Note[]; activeNoteId?: string }
-  | { type: "settings/update"; changes: Partial<WorkspaceSettings> };
+  | { type: "settings/update"; changes: Partial<WorkspaceSettings> }
+  | { type: "workspace/replace"; workspace: Workspace };
 
 export function createNote(overrides: Partial<Note> = {}): Note {
   const now = Date.now();
@@ -135,5 +136,8 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
 
     case "settings/update":
       return { ...state, settings: { ...state.settings, ...action.changes } };
+
+    case "workspace/replace":
+      return action.workspace;
   }
 }
