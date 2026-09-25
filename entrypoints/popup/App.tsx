@@ -628,6 +628,7 @@ export default function App() {
                 initialValue={activeNote.markdown}
                 label="Markdown note editor"
                 livePreviewEnabled={workspace.settings.editorStyle === "live"}
+                loadRemoteImages={workspace.settings.loadRemoteImages}
                 onChange={(markdown) =>
                   dispatch({ type: "note/update", id: activeNote.id, changes: { markdown } })
                 }
@@ -656,9 +657,10 @@ export default function App() {
         <span className="footer-hint ml-auto">Ctrl+Tab to switch</span>
       </footer>
 
-      <div className="toast-stack">
+      {/* Always present, so screen readers announce toasts as they're added. */}
+      <div className="toast-stack" role="status" aria-live="polite">
         {undoToastNote && (
-          <div className="toast" role="status">
+          <div className="toast">
             <span className="toast-text">Deleted “{undoToastNote.title}”</span>
             <button className="toast-action" onClick={reopenClosedNote}>
               <RotateCcw size={13} />Undo
@@ -669,7 +671,7 @@ export default function App() {
           </div>
         )}
         {notice && (
-          <div className="toast" role="status">
+          <div className="toast">
             <span className="toast-text">{notice}</span>
             <button className="toast-dismiss" onClick={() => setNotice(null)} aria-label="Dismiss">
               <X size={12} />
@@ -712,6 +714,13 @@ export default function App() {
                   </button>
                 ))}
               </div>
+              <label className="toggle-row mt-3">
+                <span>
+                  Load web images automatically
+                  <span className="toggle-hint">Otherwise each image waits for a click, since loading it tells its host your IP address.</span>
+                </span>
+                <input type="checkbox" checked={workspace.settings.loadRemoteImages} onChange={(event) => dispatch({ type: "settings/update", changes: { loadRemoteImages: event.target.checked } })} />
+              </label>
             </SettingGroup>
 
             <SettingGroup title="Tab layout" description="Place tabs above the editor or in a vertical rail.">
@@ -733,7 +742,7 @@ export default function App() {
               </div>
             </SettingGroup>
 
-            <SettingGroup title="Keyboard shortcuts" description="Change the shortcut that opens TabbyNotes in your browser's extension shortcut settings.">
+            <SettingGroup title="Keyboard shortcuts" description="Change the shortcut that opens TabbyNotes in your browser's extension shortcut settings. In the side panel, the browser may keep Ctrl N, Ctrl Tab and Ctrl Shift T for itself; use the tab bar and the Undo button there.">
               <dl className="shortcut-list">
                 {keyboardShortcuts.map(([action, keys]) => (
                   <div key={action}>

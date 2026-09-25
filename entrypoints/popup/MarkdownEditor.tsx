@@ -25,7 +25,7 @@ import {
 } from "react";
 import { tags } from "@lezer/highlight";
 import { backtickFencedCode } from "./BacktickFencedCode";
-import { livePreview } from "./LivePreview";
+import { livePreview, loadRemoteImages } from "./LivePreview";
 
 function toggleSelectionCommand(before: string, after: string, placeholder: string): Command {
   return (view) => {
@@ -201,9 +201,10 @@ const MONO_FONT_STACK = '"DM Mono", "SFMono-Regular", Consolas, "Liberation Mono
 // Extensions that depend on the live-preview toggle. Kept in a Compartment so the
 // toggle can be reconfigured in place instead of forcing a full editor remount,
 // which would otherwise discard the undo history.
-function previewExtensions(livePreviewEnabled: boolean): Extension {
+function previewExtensions(livePreviewEnabled: boolean, remoteImages: boolean): Extension {
   return [
     livePreviewEnabled ? livePreview : [],
+    loadRemoteImages.of(remoteImages),
     EditorView.theme({
       ".cm-scroller": {
         fontFamily: livePreviewEnabled ? SANS_FONT_STACK : MONO_FONT_STACK,
@@ -230,10 +231,11 @@ interface MarkdownEditorProps {
   onChange: (value: string) => void;
   label: string;
   livePreviewEnabled: boolean;
+  loadRemoteImages: boolean;
 }
 
 const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
-  function MarkdownEditor({ initialValue, onChange, label, livePreviewEnabled }, ref) {
+  function MarkdownEditor({ initialValue, onChange, label, livePreviewEnabled, loadRemoteImages: remoteImages }, ref) {
     const hostRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
     const onChangeRef = useRef(onChange);
@@ -242,6 +244,8 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
     // Read at (re)mount only; the effect below keeps the compartment in sync afterward.
     const livePreviewEnabledRef = useRef(livePreviewEnabled);
     livePreviewEnabledRef.current = livePreviewEnabled;
+    const remoteImagesRef = useRef(remoteImages);
+    remoteImagesRef.current = remoteImages;
 
     useEffect(() => {
       onChangeRef.current = onChange;
@@ -264,7 +268,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
           tabbyEditingKeymap,
           pasteUrlAsLink,
           tabbyMarkdown,
-          previewCompartment.of(previewExtensions(livePreviewEnabledRef.current)),
+          previewCompartment.of(previewExtensions(livePreviewEnabledRef.current, remoteImagesRef.current)),
           EditorView.lineWrapping,
           EditorView.contentAttributes.of({
             "aria-label": label,
@@ -318,9 +322,9 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
     // Toggle live/source in place so the undo history survives the switch.
     useEffect(() => {
       viewRef.current?.dispatch({
-        effects: previewCompartment.reconfigure(previewExtensions(livePreviewEnabled)),
+        effects: previewCompartment.reconfigure(previewExtensions(livePreviewEnabled, remoteImages)),
       });
-    }, [livePreviewEnabled, previewCompartment]);
+    }, [livePreviewEnabled, remoteImages, previewCompartment]);
 
     // Reflect external document changes without clobbering local edits. When the
     // change originated from this editor, the doc already matches and we skip it.

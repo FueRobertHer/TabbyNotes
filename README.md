@@ -31,7 +31,7 @@ TabbyNotes has no account, cloud sync, analytics, content scripts, or access to 
 
 ## Permissions
 
-TabbyNotes asks for no permissions in Firefox. In Chrome it requests only `sidePanel`, which shows no install warning. Images in notes load from wherever their URL points, without sending a referrer.
+TabbyNotes asks for no permissions in Firefox. In Chrome it requests only `sidePanel`, which shows no install warning. Images from the web wait for a click before loading (a setting can load them automatically), and are fetched without a referrer.
 
 ## Toolchain
 
