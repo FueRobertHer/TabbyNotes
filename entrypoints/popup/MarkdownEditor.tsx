@@ -1,5 +1,5 @@
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { Compartment, type Extension } from "@codemirror/state";
 import {
@@ -105,6 +105,10 @@ export const tabbyHistoryKeymap = historyKeymap.filter(
   (binding) => binding.key !== "Mod-u",
 );
 
+// Tab and Shift+Tab indent and outdent (e.g. to nest list items). Pressing Escape
+// first lets Tab move focus out of the editor, as CodeMirror does by default.
+export const tabbyEditingKeymap = keymap.of([...defaultKeymap, ...tabbyHistoryKeymap, indentWithTab]);
+
 export const tabbyMarkdown = markdown({
   base: markdownLanguage,
   extensions: backtickFencedCode,
@@ -190,7 +194,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
           drawSelection(),
           syntaxHighlighting(tabbyHighlightStyle),
           markdownFormattingKeymap,
-          keymap.of([...defaultKeymap, ...tabbyHistoryKeymap]),
+          tabbyEditingKeymap,
           tabbyMarkdown,
           previewCompartment.of(previewExtensions(livePreviewEnabledRef.current)),
           EditorView.lineWrapping,

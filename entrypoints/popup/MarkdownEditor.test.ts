@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   markdownFormattingKeymap,
+  tabbyEditingKeymap,
   tabbyHistoryKeymap,
   tabbyMarkdown,
   toggleLinePrefixCommand,
@@ -107,5 +108,27 @@ describe("Markdown editor keyboard shortcuts", () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(view.state.doc.toString()).toBe(expected);
+  });
+
+  it("indents and outdents list items with Tab and Shift+Tab", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    view = new EditorView({
+      parent,
+      doc: "- parent\n- child",
+      selection: { anchor: "- parent\n- ch".length },
+      extensions: [tabbyEditingKeymap],
+    });
+    const press = (shiftKey: boolean) => {
+      const event = new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true });
+      view?.contentDOM.dispatchEvent(event);
+      return event;
+    };
+
+    expect(press(false).defaultPrevented).toBe(true);
+    expect(view.state.doc.toString()).toBe("- parent\n  - child");
+
+    press(true);
+    expect(view.state.doc.toString()).toBe("- parent\n- child");
   });
 });
