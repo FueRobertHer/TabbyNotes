@@ -165,6 +165,10 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
   const [storageUsed, setStorageUsed] = useState(() => storageUsage());
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // The standalone window opened from the popup's Import button asks for files straight away.
+  const [importPromptOpen, setImportPromptOpen] = useState(
+    () => viewMode() === "window" && new URLSearchParams(window.location.search).get("import") === "1",
+  );
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Note | null>(null);
   const [pendingReset, setPendingReset] = useState(false);
@@ -278,6 +282,31 @@ export default function App() {
     window.close();
   }, [persist]);
 
+  // Browsers close the toolbar popup when a file picker opens, taking the import with it,
+  // so the popup hands importing to the standalone window.
+  const importInWindow = useCallback(async () => {
+    persist();
+    await openStandaloneWindow({ showImport: true });
+    window.close();
+  }, [persist]);
+
+  useEffect(() => {
+    if (view !== "window") return;
+    // Reloading the window shouldn't ask again.
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("import")) {
+      url.searchParams.delete("import");
+      window.history.replaceState(null, "", url);
+    }
+    window.tabbyShowImport = () => {
+      setSettingsOpen(false);
+      setImportPromptOpen(true);
+    };
+    return () => {
+      delete window.tabbyShowImport;
+    };
+  }, [view]);
+
   const openInSidePanel = useCallback(() => {
     persist();
     openSidePanel(windowIdRef.current).then(
@@ -324,7 +353,7 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [undoToastNote]);
 
-  const anyDialogOpen = settingsOpen || switcherOpen || pendingDelete !== null || pendingReset;
+  const anyDialogOpen = settingsOpen || importPromptOpen || switcherOpen || pendingDelete !== null || pendingReset;
 
   // The editor remounts when the active note changes, so focus it after that render.
   const focusEditorSoon = () => window.requestAnimationFrame(() => editorRef.current?.focus());
@@ -427,24 +456,40 @@ export default function App() {
   const importNotes = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
+    if (files.length === 0) return;
+    setSettingsOpen(false);
+    setImportPromptOpen(false);
+    // Only large files take long enough to need saying so.
+    const reading = window.setTimeout(() => setNotice(`Reading ${files.length === 1 ? "file" : "files"}…`), 300);
     const imported: Note[] = [];
     const skipped: string[] = [];
+    let alreadyHere = 0;
     for (const file of files) {
-      const text = await file.text();
+      let text: string;
+      try {
+        text = await file.text();
+      } catch {
+        skipped.push(file.name);
+        continue;
+      }
       if (/\.json$/i.test(file.name)) {
         const backup = parseBackup(text);
-        if (backup) imported.push(...notesToRestore(backup, [...workspaceRef.current.notes, ...imported]));
-        else skipped.push(file.name);
+        if (!backup) {
+          skipped.push(file.name);
+          continue;
+        }
+        const restored = notesToRestore(backup, [...workspaceRef.current.notes, ...imported]);
+        alreadyHere += backup.length - restored.length;
+        imported.push(...restored);
       } else {
         imported.push(
           createNote({ title: file.name.replace(/\.(?:md|markdown|txt)$/i, "") || "Imported note", markdown: text }),
         );
       }
     }
+    window.clearTimeout(reading);
     for (const note of imported) dispatch({ type: "note/add", note });
-    setSettingsOpen(false);
-    const added = `Imported ${imported.length} ${imported.length === 1 ? "note" : "notes"}`;
-    setNotice(skipped.length > 0 ? `${added}. Not a TabbyNotes backup: ${skipped.join(", ")}` : added);
+    setNotice(importSummary(imported.length, alreadyHere, skipped));
   };
 
   const activateTabAt = (index: number) => {
@@ -785,9 +830,9 @@ export default function App() {
               </div>
             </SettingGroup>
 
-            <SettingGroup title="Files and backups" description="Import .md files or a backup, and export standard .md files. A backup restores every tab as it was. Nothing is uploaded.">
+            <SettingGroup title="Files and backups" description={`Import .md files or a backup, and export standard .md files. A backup restores every tab as it was. Nothing is uploaded.${view === "popup" ? " Import opens TabbyNotes in its own window, because choosing a file would close this popup." : ""}`}>
               <div className="grid grid-cols-2 gap-2">
-                <button className="settings-action" onClick={() => importRef.current?.click()}><Import size={15} />Import</button>
+                <button className="settings-action" onClick={view === "popup" ? importInWindow : () => importRef.current?.click()}><Import size={15} />Import</button>
                 <button className="settings-action" onClick={() => downloadFile(`${safeFilename(activeNote.title)}.md`, activeNote.markdown)}><FileDown size={15} />Export tab</button>
                 <button className="settings-action" onClick={exportAll}><Download size={15} />Export all (.md)</button>
                 <button className="settings-action" onClick={backUpAll}><DatabaseBackup size={15} />Back up (.json)</button>
@@ -850,6 +895,18 @@ export default function App() {
         </Dialog>
       )}
 
+      {importPromptOpen && (
+        <Dialog title="Import notes" onClose={() => setImportPromptOpen(false)}>
+          <div className="p-5">
+            <p className="text-sm leading-relaxed text-[var(--muted)]">Choose Markdown files, or a TabbyNotes backup (.json) to restore its tabs. Notes you already have are skipped.</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button className="ghost-button" onClick={() => setImportPromptOpen(false)}>Cancel</button>
+              <button className="settings-action" onClick={() => importRef.current?.click()}><Import size={15} />Choose files</button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
       {pendingReset && (
         <Dialog title="Clear every note?" onClose={() => setPendingReset(false)}>
           <div className="p-5">
@@ -863,6 +920,22 @@ export default function App() {
       )}
     </main>
   );
+}
+
+/** The toast after an import, e.g. "Imported 3 notes. 13 were already here." */
+function importSummary(imported: number, alreadyHere: number, skipped: string[]): string {
+  const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
+  const parts: string[] = [];
+  if (imported > 0) {
+    parts.push(`Imported ${plural(imported, "note")}.`);
+    if (alreadyHere > 0) parts.push(`${alreadyHere} ${alreadyHere === 1 ? "was" : "were"} already here.`);
+  } else if (alreadyHere > 0) {
+    parts.push(`Nothing new to import: ${alreadyHere === 1 ? "that note is" : `all ${alreadyHere} notes are`} already here.`);
+  } else if (skipped.length === 0) {
+    parts.push("Nothing to import.");
+  }
+  if (skipped.length > 0) parts.push(`Couldn’t import ${skipped.join(", ")}: not Markdown or a TabbyNotes backup.`);
+  return parts.join(" ");
 }
 
 function SettingGroup({ title, description, children }: { title: string; description: ReactNode; children: ReactNode }) {

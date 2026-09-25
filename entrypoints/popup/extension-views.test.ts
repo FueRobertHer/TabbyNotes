@@ -38,4 +38,17 @@ describe("standalone window lookup", () => {
     expect(update).toHaveBeenCalledWith(7, { focused: true });
     expect(create).not.toHaveBeenCalled();
   });
+
+  it("asks the window to import, opening it with the prompt if it isn't open", async () => {
+    const showImport = vi.fn();
+    stubViews([Object.assign(fakeView("window", 7), { tabbyShowImport: showImport })]);
+    vi.spyOn(browser.windows, "update").mockResolvedValue({} as never);
+    await openStandaloneWindow({ showImport: true });
+    expect(showImport).toHaveBeenCalledOnce();
+
+    stubViews([]);
+    const create = vi.spyOn(browser.windows, "create").mockResolvedValue({} as never);
+    await openStandaloneWindow({ showImport: true });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ url: expect.stringMatching(/popup\.html\?view=window&import=1$/) }));
+  });
 });
