@@ -1,0 +1,53 @@
+import { act, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { createNote } from "../../src/domain/workspace";
+import { WORKSPACE_KEY } from "../../src/lib/workspace-storage";
+import App from "./App";
+
+function seed(notes = [createNote({ title: "First" }), createNote({ title: "Second" })]) {
+  window.localStorage.setItem(
+    WORKSPACE_KEY,
+    JSON.stringify({
+      version: 2,
+      notes,
+      activeNoteId: notes[0]?.id,
+      settings: { theme: "light", editorStyle: "live", tabLayout: "horizontal", confirmDelete: false },
+    }),
+  );
+  return notes;
+}
+
+describe("App", () => {
+  beforeEach(() => window.localStorage.clear());
+  afterEach(() => window.localStorage.clear());
+
+  it("undoes closing a tab from the toast", async () => {
+    seed();
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Close Second" }));
+    expect(screen.queryByRole("tab", { name: "Second" })).toBeNull();
+
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+    expect(screen.getByRole("tab", { name: "Second" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+  });
+
+  it("reopens the most recently closed tab with Ctrl+Shift+T", async () => {
+    seed();
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Close First" }));
+    await user.click(screen.getByRole("button", { name: "Close Second" }));
+    await user.keyboard("{Control>}{Shift>}t{/Shift}{/Control}");
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Second" })).toBeInTheDocument());
+    await act(async () => {
+      await user.keyboard("{Control>}{Shift>}t{/Shift}{/Control}");
+    });
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["First", "Second"]);
+  });
+});

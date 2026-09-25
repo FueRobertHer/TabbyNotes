@@ -55,6 +55,35 @@ describe("workspaceReducer", () => {
     expect(next.activeNoteId).toBe(next.notes[0]?.id);
   });
 
+  it("restores a deleted note at its old position and activates it", () => {
+    const first = createNote({ title: "First" });
+    const second = createNote({ title: "Second" });
+    const third = createNote({ title: "Third" });
+    const workspace = {
+      ...createWorkspace(),
+      notes: [first, second, third],
+      activeNoteId: first.id,
+    };
+
+    const deleted = workspaceReducer(workspace, { type: "note/delete", id: second.id });
+    const restored = workspaceReducer(deleted, { type: "note/restore", note: second, index: 1 });
+
+    expect(restored.notes.map((note) => note.id)).toEqual([first.id, second.id, third.id]);
+    expect(restored.activeNoteId).toBe(second.id);
+    expect(workspaceReducer(restored, { type: "note/restore", note: second, index: 0 })).toBe(restored);
+  });
+
+  it("replaces the empty placeholder when restoring the only deleted note", () => {
+    const workspace = createWorkspace();
+    const onlyNote = workspace.notes[0];
+    if (!onlyNote) throw new Error("expected a note");
+
+    const deleted = workspaceReducer(workspace, { type: "note/delete", id: onlyNote.id });
+    const restored = workspaceReducer(deleted, { type: "note/restore", note: onlyNote, index: 0 });
+
+    expect(restored.notes).toEqual([onlyNote]);
+  });
+
   it("reorders notes by stable IDs", () => {
     const first = createNote({ title: "First" });
     const second = createNote({ title: "Second" });

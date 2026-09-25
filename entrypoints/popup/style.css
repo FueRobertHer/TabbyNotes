@@ -556,26 +556,48 @@ input:focus-visible {
   color: #c84d40;
 }
 
-.save-alert {
+.toast-stack {
   align-items: center;
-  background: color-mix(in srgb, #d85b4b 16%, var(--surface));
-  border: 1px solid color-mix(in srgb, #d85b4b 45%, var(--line));
-  border-radius: var(--radius-md);
   bottom: 33px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  left: 50%;
+  max-width: calc(100% - 24px);
+  pointer-events: none;
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 40;
+}
+
+.toast {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow);
   color: var(--ink);
   display: flex;
   font-size: 11px;
   font-weight: 650;
   gap: 8px;
-  left: 50%;
-  padding: 8px 12px;
-  position: absolute;
-  transform: translateX(-50%);
-  z-index: 40;
+  max-width: 100%;
+  padding: 6px 8px 6px 12px;
+  pointer-events: auto;
 }
 
-.save-alert-action {
+.toast-error {
+  background: color-mix(in srgb, #d85b4b 16%, var(--surface));
+  border-color: color-mix(in srgb, #d85b4b 45%, var(--line));
+}
+
+.toast-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toast-action {
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -583,14 +605,34 @@ input:focus-visible {
   color: var(--accent-strong);
   cursor: pointer;
   display: inline-flex;
+  flex: 0 0 auto;
   font-weight: 700;
   gap: 5px;
   padding: 4px 9px;
   white-space: nowrap;
 }
 
-.save-alert-action:hover {
+.toast-action:hover {
   border-color: var(--accent);
+}
+
+.toast-dismiss {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-xs);
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 22px;
+  justify-content: center;
+  width: 22px;
+}
+
+.toast-dismiss:hover {
+  background: var(--surface-muted);
+  color: var(--ink);
 }
 
 .dialog-backdrop {

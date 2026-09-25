@@ -30,17 +30,20 @@ export type WorkspaceAction =
   | { type: "note/add"; note?: Note }
   | { type: "note/update"; id: string; changes: Partial<Pick<Note, "title" | "markdown">> }
   | { type: "note/delete"; id: string }
+  | { type: "note/restore"; note: Note; index: number }
   | { type: "note/activate"; id: string }
   | { type: "note/reorder"; sourceId: string; targetId: string; edge?: "before" | "after" }
   | { type: "notes/replace"; notes: Note[]; activeNoteId?: string }
   | { type: "settings/update"; changes: Partial<WorkspaceSettings> }
   | { type: "workspace/replace"; workspace: Workspace };
 
+export const DEFAULT_NOTE_TITLE = "Untitled note";
+
 export function createNote(overrides: Partial<Note> = {}): Note {
   const now = Date.now();
   return {
     id: crypto.randomUUID(),
-    title: "Untitled note",
+    title: DEFAULT_NOTE_TITLE,
     markdown: "",
     createdAt: now,
     updatedAt: now,
@@ -101,6 +104,17 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
           : state.activeNoteId;
 
       return { ...state, notes, activeNoteId };
+    }
+
+    case "note/restore": {
+      if (state.notes.some((note) => note.id === action.note.id)) return state;
+      // Deleting the last note leaves an empty placeholder; restoring replaces it.
+      const [only] = state.notes;
+      const onlyPlaceholder =
+        state.notes.length === 1 && only?.markdown === "" && only.title === DEFAULT_NOTE_TITLE;
+      const notes = onlyPlaceholder ? [] : [...state.notes];
+      notes.splice(Math.max(0, Math.min(action.index, notes.length)), 0, action.note);
+      return { ...state, notes, activeNoteId: action.note.id };
     }
 
     case "note/activate":

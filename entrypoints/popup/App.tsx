@@ -16,6 +16,7 @@ import {
   Moon,
   Plus,
   Quote,
+  RotateCcw,
   Settings,
   SquareCode,
   Sparkles,
@@ -40,6 +41,7 @@ import { browser } from "wxt/browser";
 
 import {
   createNote,
+  DEFAULT_NOTE_TITLE,
   workspaceReducer,
   type Note,
 } from "../../src/domain/workspace";
@@ -51,6 +53,15 @@ import type { MarkdownEditorHandle } from "./MarkdownEditor";
 const MarkdownEditor = lazy(() => import("./MarkdownEditor"));
 
 type SaveStatus = "saved" | "error";
+
+interface ClosedNote {
+  note: Note;
+  index: number;
+}
+
+// How many closed tabs Ctrl/⌘ Shift T can bring back, newest first.
+const CLOSED_NOTES_LIMIT = 20;
+const UNDO_TOAST_MS = 6000;
 
 const formattingActions = [
   { label: "Bold", shortcut: "Ctrl/⌘ B", icon: Bold, run: (editor: MarkdownEditorHandle) => editor.wrapSelection("**", "**", "bold text") },
@@ -72,7 +83,7 @@ function safeFilename(title: string): string {
     .replace(/[\\/:*?"<>|]+/g, "-")
     .replace(/\s+/g, " ")
     .slice(0, 80);
-  return safe || "Untitled note";
+  return safe || DEFAULT_NOTE_TITLE;
 }
 
 function downloadMarkdown(filename: string, content: string): void {
@@ -97,9 +108,12 @@ export default function App() {
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; edge: "before" | "after" } | null>(null);
   const [tabOverflow, setTabOverflow] = useState({ start: false, end: false });
+  const [undoToastNote, setUndoToastNote] = useState<Note | null>(null);
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
+  // Only read inside event handlers, so a ref avoids re-rendering on every close.
+  const closedNotesRef = useRef<ClosedNote[]>([]);
   const workspaceRef = useRef(workspace);
   workspaceRef.current = workspace;
 
@@ -164,6 +178,27 @@ export default function App() {
 
   const addNote = useCallback(() => dispatch({ type: "note/add" }), []);
 
+  const deleteNote = useCallback((note: Note) => {
+    const index = workspaceRef.current.notes.findIndex((candidate) => candidate.id === note.id);
+    if (index < 0) return;
+    dispatch({ type: "note/delete", id: note.id });
+    closedNotesRef.current = [{ note, index }, ...closedNotesRef.current].slice(0, CLOSED_NOTES_LIMIT);
+    setUndoToastNote(note);
+  }, []);
+
+  const reopenClosedNote = useCallback(() => {
+    const [latest, ...rest] = closedNotesRef.current;
+    closedNotesRef.current = rest;
+    if (latest) dispatch({ type: "note/restore", note: latest.note, index: latest.index });
+    setUndoToastNote(null);
+  }, []);
+
+  useEffect(() => {
+    if (!undoToastNote) return;
+    const timeout = window.setTimeout(() => setUndoToastNote(null), UNDO_TOAST_MS);
+    return () => window.clearTimeout(timeout);
+  }, [undoToastNote]);
+
   const anyDialogOpen = settingsOpen || pendingDelete !== null || pendingReset;
 
   useEffect(() => {
@@ -171,9 +206,13 @@ export default function App() {
     if (anyDialogOpen) return;
     const handleShortcut = (event: KeyboardEvent) => {
       const modifier = event.metaKey || event.ctrlKey;
-      if (modifier && event.key.toLowerCase() === "n") {
+      if (modifier && !event.shiftKey && event.key.toLowerCase() === "n") {
         event.preventDefault();
         addNote();
+      }
+      if (modifier && event.shiftKey && event.key.toLowerCase() === "t") {
+        event.preventDefault();
+        reopenClosedNote();
       }
       if (event.ctrlKey && event.key === "Tab") {
         event.preventDefault();
@@ -186,7 +225,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [addNote, anyDialogOpen, workspace.activeNoteId, workspace.notes]);
+  }, [addNote, anyDialogOpen, reopenClosedNote, workspace.activeNoteId, workspace.notes]);
 
   useEffect(() => {
     const activeTab = tabListRef.current?.querySelector<HTMLElement>("[aria-selected='true']");
@@ -226,7 +265,7 @@ export default function App() {
 
   const requestDelete = (note: Note) => {
     if (workspace.settings.confirmDelete) setPendingDelete(note);
-    else dispatch({ type: "note/delete", id: note.id });
+    else deleteNote(note);
   };
 
   const exportAll = () => {
@@ -430,7 +469,7 @@ export default function App() {
             }
             onBlur={(event) => {
               if (!event.target.value.trim()) {
-                dispatch({ type: "note/update", id: activeNote.id, changes: { title: "Untitled note" } });
+                dispatch({ type: "note/update", id: activeNote.id, changes: { title: DEFAULT_NOTE_TITLE } });
               }
             }}
             aria-label="Note title"
@@ -473,15 +512,28 @@ export default function App() {
         <span className="ml-auto">Ctrl+Tab to switch</span>
       </footer>
 
-      {saveStatus === "error" && (
-        <div className="save-alert" role="alert">
-          <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />
-          <span>Couldn’t save to this browser. Export your notes so you don’t lose them.</span>
-          <button className="save-alert-action" onClick={exportAll}>
-            <Download size={13} />Export all
-          </button>
-        </div>
-      )}
+      <div className="toast-stack">
+        {undoToastNote && (
+          <div className="toast" role="status">
+            <span className="toast-text">Deleted “{undoToastNote.title}”</span>
+            <button className="toast-action" onClick={reopenClosedNote}>
+              <RotateCcw size={13} />Undo
+            </button>
+            <button className="toast-dismiss" onClick={() => setUndoToastNote(null)} aria-label="Dismiss">
+              <X size={12} />
+            </button>
+          </div>
+        )}
+        {saveStatus === "error" && (
+          <div className="toast toast-error" role="alert">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />
+            <span>Couldn’t save to this browser. Export your notes so you don’t lose them.</span>
+            <button className="toast-action" onClick={exportAll}>
+              <Download size={13} />Export all
+            </button>
+          </div>
+        )}
+      </div>
 
       <input ref={importRef} className="hidden" type="file" accept=".md,.markdown,text/markdown,text/plain" multiple onChange={importNotes} />
 
@@ -528,7 +580,7 @@ export default function App() {
               </div>
             </SettingGroup>
 
-            <SettingGroup title="Safety" description="Ask before closing a tab.">
+            <SettingGroup title="Safety" description="Ask before closing a tab. Closed tabs can be reopened with Ctrl/⌘ Shift T.">
               <label className="toggle-row">
                 <span>Confirm tab deletion</span>
                 <input type="checkbox" checked={workspace.settings.confirmDelete} onChange={(event) => dispatch({ type: "settings/update", changes: { confirmDelete: event.target.checked } })} />
@@ -551,7 +603,7 @@ export default function App() {
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button className="ghost-button" onClick={() => setPendingDelete(null)}>Cancel</button>
-              <button className="danger-button" onClick={() => { dispatch({ type: "note/delete", id: pendingDelete.id }); setPendingDelete(null); }}><Trash2 size={15} />Delete tab</button>
+              <button className="danger-button" onClick={() => { deleteNote(pendingDelete); setPendingDelete(null); }}><Trash2 size={15} />Delete tab</button>
             </div>
           </div>
         </Dialog>
