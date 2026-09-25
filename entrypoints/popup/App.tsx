@@ -52,6 +52,7 @@ import {
   parseBackup,
   saveWorkspace,
   serializeBackup,
+  storageUsage,
   WORKSPACE_KEY,
 } from "../../src/lib/workspace-storage";
 
@@ -70,6 +71,9 @@ interface ClosedNote {
 // How many closed tabs Ctrl/⌘ Shift T can bring back, newest first.
 const CLOSED_NOTES_LIMIT = 20;
 const UNDO_TOAST_MS = 6000;
+// Show storage use in the footer from this fraction of the quota, and warn from the next.
+const STORAGE_SHOW_AT = 0.5;
+const STORAGE_WARN_AT = 0.85;
 
 const formattingActions = [
   { label: "Bold", shortcut: "Ctrl/⌘ B", icon: Bold, run: (editor: MarkdownEditorHandle) => editor.wrapSelection("**", "**", "bold text") },
@@ -110,6 +114,7 @@ const isWindowView = () => document.documentElement.dataset.view === "window";
 export default function App() {
   const [workspace, dispatch] = useReducer(workspaceReducer, null, () => loadWorkspace());
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
+  const [storageUsed, setStorageUsed] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Note | null>(null);
   const [pendingReset, setPendingReset] = useState(false);
@@ -135,6 +140,7 @@ export default function App() {
     try {
       saveWorkspace(workspaceRef.current);
       setSaveStatus("saved");
+      setStorageUsed(storageUsage());
     } catch {
       setSaveStatus("error");
     }
@@ -538,6 +544,14 @@ export default function App() {
       <footer className="app-footer">
         <span>{activeNote.markdown.length.toLocaleString()} characters</span>
         <span>{workspace.notes.length} {workspace.notes.length === 1 ? "tab" : "tabs"}</span>
+        {storageUsed >= STORAGE_SHOW_AT && (
+          <span
+            className={storageUsed >= STORAGE_WARN_AT ? "storage-warning" : ""}
+            title="Browsers limit how much an extension can keep. Back up and delete old notes to free space."
+          >
+            Storage {Math.min(100, Math.round(storageUsed * 100))}% full
+          </span>
+        )}
         <span className="ml-auto">Ctrl+Tab to switch</span>
       </footer>
 

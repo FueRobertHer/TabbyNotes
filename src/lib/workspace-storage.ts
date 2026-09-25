@@ -16,6 +16,10 @@ import {
 // The tradeoffs (smaller quota, main-thread writes) are mitigated by debouncing saves in
 // the popup. Revisit chrome.storage only if a background/service-worker surface ever needs
 // the data or the quota becomes limiting.
+// Browsers cap localStorage at about 5 million characters per extension (Chrome counts
+// 10 MB of UTF-16, Firefox 5 MiB of characters). Use the lower figure so warnings come early.
+export const STORAGE_QUOTA_CHARS = 5_000_000;
+
 export const WORKSPACE_KEY = "tabby-notes:workspace:v5";
 export const LEGACY_KEY = "saveState";
 export const LEGACY_BACKUP_KEY = "tabby-notes:legacy-backup:v4";
@@ -209,4 +213,15 @@ export function notesToRestore(backup: Note[], existing: Note[]): Note[] {
     if (current.title === note.title && current.markdown === note.markdown) return [];
     return [{ ...note, id: crypto.randomUUID() }];
   });
+}
+
+/** Fraction (0 to 1+) of the estimated localStorage quota in use across every key. */
+export function storageUsage(storage: Storage = window.localStorage): number {
+  let used = 0;
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key === null) continue;
+    used += key.length + (storage.getItem(key)?.length ?? 0);
+  }
+  return used / STORAGE_QUOTA_CHARS;
 }

@@ -10,6 +10,8 @@ import {
   parseBackup,
   saveWorkspace,
   serializeBackup,
+  STORAGE_QUOTA_CHARS,
+  storageUsage,
   WORKSPACE_KEY,
 } from "./workspace-storage";
 
@@ -130,5 +132,11 @@ describe("workspace storage", () => {
     expect(restored.map((note) => note.title)).toEqual(["Edited", "New"]);
     expect(restored[0]?.id).not.toBe(edited.id);
     expect(restored[1]).toBe(fresh);
+  });
+
+  it("estimates how much of the storage quota is used", () => {
+    expect(storageUsage()).toBe(0);
+    localStorage.setItem("k", "x".repeat(STORAGE_QUOTA_CHARS / 2 - 1));
+    expect(storageUsage()).toBe(0.5);
   });
 });

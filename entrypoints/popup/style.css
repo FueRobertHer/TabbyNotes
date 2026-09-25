@@ -541,6 +541,10 @@ input:focus-visible {
   padding: 0 16px;
 }
 
+.storage-warning {
+  color: #c84d40;
+}
+
 .save-status {
   align-items: center;
   color: var(--muted);
