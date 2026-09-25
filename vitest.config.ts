@@ -6,5 +6,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./test/setup.ts"],
+    // Node 25+ ships its own localStorage global, which hides jsdom's.
+    execArgv: ["--no-experimental-webstorage"],
   },
 });

@@ -35,21 +35,19 @@ TabbyNotes asks for no permissions in Firefox. In Chrome it requests only `sideP
 
 ## Toolchain
 
-- Bun 1.4 canary (Rust runtime)
+- Bun 1.4.2 (Rust runtime)
 - TypeScript 7 (native Go compiler)
 - WXT and React 19
 - Tailwind CSS 4
 - CodeMirror 6
 - Vitest
 
-Install the current Bun 1.4 canary, then install dependencies:
+Install Bun 1.4.2 or newer from the stable channel, then install dependencies:
 
 ```sh
-bun upgrade --canary
+bun upgrade --stable
 bun install
 ```
-
-The project deliberately avoids Bun-canary-only APIs so it remains straightforward to move to the stable 1.4 channel.
 
 ## Development
 
