@@ -20,7 +20,7 @@ TabbyNotes has no account, cloud sync, analytics, content scripts, or access to 
 
 ## Highlights
 
-- Obsidian-style live preview keeps Markdown formatted and editable in one surface, including tables, images and syntax-colored code blocks.
+- Obsidian-style live preview keeps Markdown formatted and editable in one surface, including tables, images, video, audio and syntax-colored code blocks. Links to image, video and audio files get an icon that shows the file below the link.
 - Markdown syntax appears on the active line; a Source setting shows the raw document.
 - Tabs can sit horizontally above the editor or in a vertical rail. Double-click a tab to rename it.
 - Open TabbyNotes in the browser side panel or a resizable window when the toolbar popup feels cramped. While the window is open, the toolbar button brings it forward instead of opening the popup. Open copies stay in sync; if two copies edit the same note at once, the later edit wins.
@@ -31,7 +31,7 @@ TabbyNotes has no account, cloud sync, analytics, content scripts, or access to 
 
 ## Permissions
 
-TabbyNotes asks for no permissions in Firefox. In Chrome it requests only `sidePanel`, which shows no install warning. Images from the web stay a link until you click their image icon (a setting can load them automatically), and are fetched without a referrer. The same icon hides any image again.
+TabbyNotes asks for no permissions in Firefox. In Chrome it requests only `sidePanel`, which shows no install warning. Images, video and audio from the web stay a link until you click their icon (a setting can load embedded ones automatically), and are fetched without a referrer. The same icon hides them again.
 
 ## Toolchain
 
