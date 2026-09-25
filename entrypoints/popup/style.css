@@ -21,6 +21,13 @@
   --active-line: #fff4dc;
   --selection: #f2c77f;
   --selection-ink: #241d18;
+  --syntax-keyword: #a23f7e;
+  --syntax-string: #3d7a36;
+  --syntax-comment: #938a80;
+  --syntax-number: #b0561d;
+  --syntax-function: #2d6a99;
+  --syntax-type: #8c6400;
+  --syntax-property: #6b4fa0;
   --shadow: 0 18px 45px rgba(79, 56, 31, 0.14);
 }
 
@@ -41,6 +48,13 @@
   --active-line: #332920;
   --selection: #663819;
   --selection-ink: #fff8ed;
+  --syntax-keyword: #e98ab8;
+  --syntax-string: #a3d18a;
+  --syntax-comment: #958b81;
+  --syntax-number: #f2a466;
+  --syntax-function: #82b8e8;
+  --syntax-type: #e8c36a;
+  --syntax-property: #c3a3ec;
   --shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
 }
 
@@ -62,6 +76,13 @@
     --active-line: #332920;
     --selection: #663819;
     --selection-ink: #fff8ed;
+    --syntax-keyword: #e98ab8;
+    --syntax-string: #a3d18a;
+    --syntax-comment: #958b81;
+    --syntax-number: #f2a466;
+    --syntax-function: #82b8e8;
+    --syntax-type: #e8c36a;
+    --syntax-property: #c3a3ec;
     --shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
   }
 }
@@ -851,32 +872,34 @@ input:focus-visible {
   border-bottom: 1px solid var(--line);
 }
 
-.cm-editor .cm-search {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
+/* :root raises specificity above CodeMirror's injected base theme. */
+:root .cm-editor .cm-panel.cm-search {
   font-size: 11px;
-  gap: 4px 6px;
-  padding: 8px 36px 8px 22px;
+  padding: 6px 40px 6px 22px;
 }
 
-.cm-editor .cm-search br {
-  display: none;
+:root .cm-editor .cm-panel.cm-search input,
+:root .cm-editor .cm-panel.cm-search button,
+:root .cm-editor .cm-panel.cm-search label {
+  margin: 3px 6px 3px 0;
+  vertical-align: middle;
 }
 
 .cm-editor .cm-search label {
   align-items: center;
   color: var(--muted);
   display: inline-flex;
+  font-size: 11px;
   gap: 4px;
 }
 
-.cm-editor .cm-search input[type="checkbox"] {
+:root .cm-editor .cm-search label input[type="checkbox"] {
   accent-color: var(--accent-strong);
   margin: 0;
 }
 
 .cm-editor .cm-textfield {
+  width: 170px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-xs);

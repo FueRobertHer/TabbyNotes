@@ -1,6 +1,7 @@
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { languages } from "@codemirror/language-data";
 import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
 import { Compartment, type Extension } from "@codemirror/state";
 import {
@@ -118,6 +119,8 @@ export const tabbyEditingKeymap = keymap.of([
 export const tabbyMarkdown = markdown({
   base: markdownLanguage,
   extensions: backtickFencedCode,
+  // Each language's parser is fetched from its own chunk the first time a note uses it.
+  codeLanguages: languages,
 });
 
 // CodeMirror's defaultHighlightStyle hardcodes light-theme colors (e.g. dark blue
@@ -133,6 +136,14 @@ export const tabbyHighlightStyle = HighlightStyle.define([
   { tag: [tags.labelName, tags.processingInstruction, tags.contentSeparator, tags.meta], color: "var(--muted)" },
   { tag: tags.quote, color: "var(--muted)" },
   { tag: tags.invalid, color: "#d85b4b" },
+  // Code inside fenced blocks, e.g. ```ts.
+  { tag: [tags.keyword, tags.operatorKeyword, tags.modifier, tags.controlKeyword], color: "var(--syntax-keyword)" },
+  { tag: [tags.string, tags.special(tags.string), tags.regexp, tags.character], color: "var(--syntax-string)" },
+  { tag: tags.comment, color: "var(--syntax-comment)", fontStyle: "italic" },
+  { tag: [tags.number, tags.bool, tags.null, tags.atom], color: "var(--syntax-number)" },
+  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName), tags.macroName], color: "var(--syntax-function)" },
+  { tag: [tags.typeName, tags.className, tags.namespace, tags.tagName], color: "var(--syntax-type)" },
+  { tag: [tags.propertyName, tags.attributeName], color: "var(--syntax-property)" },
 ]);
 
 const SANS_FONT_STACK =
