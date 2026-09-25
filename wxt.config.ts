@@ -7,7 +7,6 @@ export default defineConfig({
     name: "TabbyNotes",
     short_name: "TabbyNotes",
     description: "A local-first, tabbed Markdown notebook for your browser.",
-    version: "5.0.0",
     action: {
       default_title: "Open TabbyNotes",
     },

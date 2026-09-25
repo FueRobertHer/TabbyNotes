@@ -1,4 +1,8 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+/* Scan only shipped code, so the Firefox sources zip rebuilds identical output. */
+@source "../../entrypoints";
+@source "../../src";
+@source not "../../**/*.test.*";
 
 :root {
   color-scheme: light;
