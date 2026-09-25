@@ -10,12 +10,18 @@ import {
 } from "../domain/workspace";
 
 // Storage intentionally uses window.localStorage rather than chrome.storage.local.
-// The popup is the only surface that reads or writes the workspace, so the synchronous
+// Only the extension's own pages (popup, standalone window, side panel) read or write the
+// workspace, and they share this origin's localStorage. The synchronous
 // localStorage API keeps load/save simple (no async loading state) and, crucially, needs
-// no "storage" permission — preserving the extension's zero-permission privacy posture.
+// no "storage" permission, keeping the permission list minimal (none in Firefox; only
+// the warning-free "sidePanel" in Chrome).
 // The tradeoffs (smaller quota, main-thread writes) are mitigated by debouncing saves in
 // the popup. Revisit chrome.storage only if a background/service-worker surface ever needs
 // the data or the quota becomes limiting.
+// Browsers cap localStorage at about 5 million characters per extension (Chrome counts
+// 10 MB of UTF-16, Firefox 5 MiB of characters). Use the lower figure so warnings come early.
+export const STORAGE_QUOTA_CHARS = 5_000_000;
+
 export const WORKSPACE_KEY = "tabby-notes:workspace:v5";
 export const LEGACY_KEY = "saveState";
 export const LEGACY_BACKUP_KEY = "tabby-notes:legacy-backup:v4";
@@ -50,7 +56,7 @@ function isTabLayout(value: unknown): value is TabLayout {
 
 function parseNote(value: unknown): Note | null {
   if (!isRecord(value)) return null;
-  const { id, title, markdown, createdAt, updatedAt } = value;
+  const { id, title, markdown, createdAt, updatedAt, autoTitle } = value;
   if (
     typeof id !== "string" ||
     typeof title !== "string" ||
@@ -60,7 +66,9 @@ function parseNote(value: unknown): Note | null {
   ) {
     return null;
   }
-  return { id, title, markdown, createdAt, updatedAt };
+  const note: Note = { id, title, markdown, createdAt, updatedAt };
+  if (typeof autoTitle === "boolean") note.autoTitle = autoTitle;
+  return note;
 }
 
 function parseWorkspace(value: unknown): Workspace | null {
@@ -75,7 +83,15 @@ function parseWorkspace(value: unknown): Workspace | null {
 
   const notes = value.notes.map(parseNote);
   if (notes.some((note) => note === null)) return null;
-  const validNotes = notes.filter((note): note is Note => note !== null);
+  // A hand-edited file could repeat an ID, which would make two tabs act as one.
+  const seenIds = new Set<string>();
+  const validNotes = notes
+    .filter((note): note is Note => note !== null)
+    .map((note) => {
+      const unique = seenIds.has(note.id) ? { ...note, id: crypto.randomUUID() } : note;
+      seenIds.add(unique.id);
+      return unique;
+    });
   if (validNotes.length === 0) return null;
 
   const activeNoteId =
@@ -100,6 +116,7 @@ function parseWorkspace(value: unknown): Workspace | null {
         typeof value.settings.confirmDelete === "boolean"
           ? value.settings.confirmDelete
           : true,
+      loadRemoteImages: value.settings.loadRemoteImages === true,
     },
   };
 }
@@ -143,6 +160,7 @@ function migrateLegacy(raw: string): Workspace | null {
       tabLayout: "horizontal",
       confirmDelete:
         typeof legacy.confirmDelete === "boolean" ? legacy.confirmDelete : true,
+      loadRemoteImages: false,
     },
   };
 }
@@ -176,9 +194,55 @@ export function loadWorkspace(storage: Storage = window.localStorage): Workspace
   return createWorkspace();
 }
 
+/** Saves the workspace and returns exactly what was stored. */
 export function saveWorkspace(
   workspace: Workspace,
   storage: Storage = window.localStorage,
-): void {
-  storage.setItem(WORKSPACE_KEY, JSON.stringify(workspace));
+): string {
+  const raw = JSON.stringify(workspace);
+  storage.setItem(WORKSPACE_KEY, raw);
+  return raw;
+}
+
+export function readStoredWorkspace(storage: Storage = window.localStorage): string | null {
+  return storage.getItem(WORKSPACE_KEY);
+}
+
+export function serializeBackup(workspace: Workspace): string {
+  return `${JSON.stringify(workspace, null, 2)}\n`;
+}
+
+/** Reads the notes out of a backup made by serializeBackup, or null if the text isn't one. */
+export function parseBackup(text: string): Note[] | null {
+  try {
+    return parseWorkspace(JSON.parse(text))?.notes ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Prepares backed-up notes for adding to an existing workspace. Notes that are already
+ * present unchanged are skipped, so restoring the same backup twice doesn't duplicate
+ * them; a note whose ID exists with different content is kept as a copy with a new ID.
+ */
+export function notesToRestore(backup: Note[], existing: Note[]): Note[] {
+  const existingById = new Map(existing.map((note) => [note.id, note]));
+  return backup.flatMap((note) => {
+    const current = existingById.get(note.id);
+    if (!current) return [note];
+    if (current.title === note.title && current.markdown === note.markdown) return [];
+    return [{ ...note, id: crypto.randomUUID() }];
+  });
+}
+
+/** Fraction (0 to 1+) of the estimated localStorage quota in use across every key. */
+export function storageUsage(storage: Storage = window.localStorage): number {
+  let used = 0;
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key === null) continue;
+    used += key.length + (storage.getItem(key)?.length ?? 0);
+  }
+  return used / STORAGE_QUOTA_CHARS;
 }

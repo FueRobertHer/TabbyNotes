@@ -2,7 +2,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { livePreview } from "./LivePreview";
+import { livePreview, loadRemoteImages, tableCells } from "./LivePreview";
 
 describe("livePreview", () => {
   let view: EditorView | undefined;
@@ -67,5 +67,108 @@ describe("livePreview", () => {
 
     expect(view.state.doc.toString()).toContain("- [x] Open task");
     expect(parent.querySelectorAll(".cm-live-task-complete")).toHaveLength(2);
+  });
+
+  it("splits table rows on unescaped pipes", () => {
+    expect(tableCells("| a | b \\| c |  |")).toEqual(["a", "b | c", ""]);
+    expect(tableCells("a | b")).toEqual(["a", "b"]);
+  });
+
+  it("renders tables and images until the cursor enters them", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    const doc = [
+      "Intro",
+      "",
+      "| Item | Qty |",
+      "| --- | ---: |",
+      "| **Milk** | 2 |",
+      "",
+      "![A cat](https://example.com/cat.png)",
+      "![Bad](javascript:alert(1))",
+    ].join("\n");
+    view = new EditorView({
+      parent,
+      doc,
+      selection: { anchor: 0 },
+      extensions: [markdown({ base: markdownLanguage }), livePreview],
+    });
+
+    const rows = parent.querySelectorAll(".cm-live-table-row");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.textContent).toBe("ItemQty");
+    expect(rows[1]?.querySelector("strong")?.textContent).toBe("Milk");
+    expect(rows[1]?.querySelectorAll<HTMLElement>(".cm-live-table-cell")[1]?.style.textAlign).toBe("right");
+    expect(parent.textContent).not.toContain("---");
+
+    // Web images wait for a click unless the setting allows them.
+    expect(parent.querySelector(".cm-live-image img")).toBeNull();
+    const load = parent.querySelector<HTMLButtonElement>(".cm-live-image-load");
+    expect(load?.textContent).toBe("🖼 A cat · Load from example.com");
+    load?.click();
+    const image = parent.querySelector<HTMLImageElement>(".cm-live-image img");
+    expect(image?.src).toBe("https://example.com/cat.png");
+    expect(image?.alt).toBe("A cat");
+    expect(parent.querySelectorAll(".cm-live-image")).toHaveLength(1);
+    expect(parent.textContent).toContain("javascript:alert(1)");
+
+    view.dispatch({ selection: { anchor: doc.indexOf("Milk") } });
+    expect(parent.querySelector(".cm-live-table-row")).toBeNull();
+    expect(parent.querySelectorAll(".cm-live-table-source")).toHaveLength(3);
+
+    view.dispatch({ selection: { anchor: doc.indexOf("A cat") } });
+    expect(parent.querySelector(".cm-live-image")).toBeNull();
+    expect(parent.textContent).toContain("https://example.com/cat.png");
+  });
+
+  it("loads web images straight away when the setting allows it", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    view = new EditorView({
+      parent,
+      doc: "Intro\n\n![Dog](https://example.com/dog.png)",
+      extensions: [markdown({ base: markdownLanguage }), livePreview, loadRemoteImages.of(true)],
+    });
+
+    expect(parent.querySelector<HTMLImageElement>(".cm-live-image img")?.src).toBe("https://example.com/dog.png");
+  });
+
+  it.each([
+    ["![multi\nline alt](https://example.com/a.png)", "alt text"],
+    ["![a](\nhttps://example.com/a.png)", "URL"],
+  ])("leaves an image written across lines as text (%#: %s)", (image) => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    const doc = `Intro\n\n${image}`;
+    // CodeMirror throws if a plugin replaces a line break, including when the view is created.
+    view = new EditorView({
+      parent,
+      doc,
+      selection: { anchor: doc.length },
+      extensions: [markdown({ base: markdownLanguage }), livePreview],
+    });
+    view.dispatch({ selection: { anchor: 0 } });
+
+    expect(parent.querySelector(".cm-live-image")).toBeNull();
+    expect(parent.textContent).toContain("example.com/a.png");
+  });
+
+  it("renders a table inside a blockquote without the quote marker as a column", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    view = new EditorView({
+      parent,
+      doc: "Intro\n\n> | a | b |\n> | --- | --- |\n> | 1 | 2 |",
+      extensions: [markdown({ base: markdownLanguage }), livePreview],
+    });
+
+    const rows = [...parent.querySelectorAll(".cm-live-table-row")].map((row) =>
+      [...row.querySelectorAll(".cm-live-table-cell")].map((cell) => cell.textContent),
+    );
+    expect(rows).toEqual([
+      ["a", "b"],
+      ["1", "2"],
+    ]);
+    expect(parent.textContent).not.toContain(">");
   });
 });

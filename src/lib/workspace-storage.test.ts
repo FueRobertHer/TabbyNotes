@@ -1,12 +1,17 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { createWorkspace } from "../domain/workspace";
+import { createNote, createWorkspace } from "../domain/workspace";
 import {
   LEGACY_BACKUP_KEY,
   LEGACY_KEY,
   INVALID_WORKSPACE_BACKUP_KEY,
   loadWorkspace,
+  notesToRestore,
+  parseBackup,
   saveWorkspace,
+  serializeBackup,
+  STORAGE_QUOTA_CHARS,
+  storageUsage,
   WORKSPACE_KEY,
 } from "./workspace-storage";
 
@@ -79,6 +84,7 @@ describe("workspace storage", () => {
       editorStyle: "live",
       tabLayout: "horizontal",
       confirmDelete: false,
+      loadRemoteImages: false,
     });
   });
 
@@ -101,5 +107,56 @@ describe("workspace storage", () => {
 
     expect(workspace.version).toBe(2);
     expect(localStorage.getItem(INVALID_WORKSPACE_BACKUP_KEY)).toBe(unsupported);
+  });
+
+  it("round-trips notes through a backup file", () => {
+    const workspace = {
+      ...createWorkspace(),
+      notes: [createNote({ title: "A", markdown: "# A" }), createNote({ title: "B" })],
+    };
+
+    expect(parseBackup(serializeBackup(workspace))).toEqual(workspace.notes);
+    expect(parseBackup("# not a backup")).toBeNull();
+    expect(parseBackup(JSON.stringify({ notes: "nope" }))).toBeNull();
+  });
+
+  it("skips unchanged notes and copies conflicting ones when restoring", () => {
+    const unchanged = createNote({ title: "Same", markdown: "same" });
+    const edited = createNote({ title: "Edited", markdown: "old" });
+    const fresh = createNote({ title: "New" });
+
+    const restored = notesToRestore(
+      [unchanged, { ...edited, markdown: "new" }, fresh],
+      [unchanged, edited],
+    );
+
+    expect(restored.map((note) => note.title)).toEqual(["Edited", "New"]);
+    expect(restored[0]?.id).not.toBe(edited.id);
+    expect(restored[1]).toBe(fresh);
+  });
+
+  it("estimates how much of the storage quota is used", () => {
+    expect(storageUsage()).toBe(0);
+    localStorage.setItem("k", "x".repeat(STORAGE_QUOTA_CHARS / 2 - 1));
+    expect(storageUsage()).toBe(0.5);
+  });
+
+  it("gives repeated note IDs in a backup new ones", () => {
+    const note = createNote({ title: "Twin" });
+    const backup = serializeBackup({ ...createWorkspace(), notes: [note, { ...note, title: "Other twin" }] });
+
+    const notes = parseBackup(backup) ?? [];
+
+    expect(notes.map((n) => n.title)).toEqual(["Twin", "Other twin"]);
+    expect(new Set(notes.map((n) => n.id)).size).toBe(2);
+    expect(notes[0]?.id).toBe(note.id);
+  });
+
+  it("keeps the auto-title flag through a save", () => {
+    const workspace = createWorkspace();
+    const notes = [createNote({ autoTitle: false }), createNote()];
+    saveWorkspace({ ...workspace, notes, activeNoteId: notes[0]!.id });
+
+    expect(loadWorkspace().notes.map((n) => n.autoTitle)).toEqual([false, undefined]);
   });
 });

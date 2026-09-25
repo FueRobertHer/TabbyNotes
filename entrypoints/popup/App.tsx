@@ -2,8 +2,10 @@ import {
   Bold,
   Check,
   Code2,
+  DatabaseBackup,
   Download,
   FileDown,
+  FileSearch,
   FileText,
   Heading2,
   Import,
@@ -14,8 +16,11 @@ import {
   Maximize2,
   Minus,
   Moon,
+  PanelRight,
   Plus,
   Quote,
+  RotateCcw,
+  Search,
   Settings,
   SquareCode,
   Sparkles,
@@ -36,21 +41,65 @@ import {
   useRef,
   useState,
 } from "react";
-import { browser } from "wxt/browser";
+import { flushSync } from "react-dom";
 
 import {
   createNote,
+  DEFAULT_NOTE_TITLE,
+  mergeWorkspaces,
   workspaceReducer,
   type Note,
+  type Workspace,
+  type WorkspaceAction,
 } from "../../src/domain/workspace";
-import { loadWorkspace, saveWorkspace, WORKSPACE_KEY } from "../../src/lib/workspace-storage";
+import {
+  loadWorkspace,
+  notesToRestore,
+  readStoredWorkspace,
+  parseBackup,
+  saveWorkspace,
+  serializeBackup,
+  storageUsage,
+  WORKSPACE_KEY,
+} from "../../src/lib/workspace-storage";
 
+import { countWords, formatEdited } from "../../src/lib/format";
 import Dialog from "./Dialog";
+import {
+  canOpenSidePanel,
+  currentWindowId,
+  openSidePanel,
+  openStandaloneWindow,
+  viewMode,
+} from "./extension-views";
 import type { MarkdownEditorHandle } from "./MarkdownEditor";
+import QuickSwitcher from "./QuickSwitcher";
 
 const MarkdownEditor = lazy(() => import("./MarkdownEditor"));
 
 type SaveStatus = "saved" | "error";
+
+interface ClosedNote {
+  note: Note;
+  index: number;
+}
+
+// How many closed tabs Ctrl/⌘ Shift T can bring back, newest first.
+const CLOSED_NOTES_LIMIT = 20;
+const UNDO_TOAST_MS = 6000;
+// Show storage use in the footer from this fraction of the quota, and warn from the next.
+const STORAGE_SHOW_AT = 0.5;
+const STORAGE_WARN_AT = 0.85;
+
+const keyboardShortcuts = [
+  ["Open TabbyNotes", "Alt Shift N"],
+  ["New note", "Ctrl/⌘ N"],
+  ["Go to note", "Ctrl/⌘ P"],
+  ["Find and replace", "Ctrl/⌘ F"],
+  ["Reopen closed tab", "Ctrl/⌘ Shift T"],
+  ["Next / previous tab", "Ctrl Tab / Ctrl Shift Tab"],
+  ["Indent / outdent", "Tab / Shift Tab"],
+] as const;
 
 const formattingActions = [
   { label: "Bold", shortcut: "Ctrl/⌘ B", icon: Bold, run: (editor: MarkdownEditorHandle) => editor.wrapSelection("**", "**", "bold text") },
@@ -72,11 +121,11 @@ function safeFilename(title: string): string {
     .replace(/[\\/:*?"<>|]+/g, "-")
     .replace(/\s+/g, " ")
     .slice(0, 80);
-  return safe || "Untitled note";
+  return safe || DEFAULT_NOTE_TITLE;
 }
 
-function downloadMarkdown(filename: string, content: string): void {
-  const url = URL.createObjectURL(new Blob([content], { type: "text/markdown;charset=utf-8" }));
+function downloadFile(filename: string, content: string, type = "text/markdown"): void {
+  const url = URL.createObjectURL(new Blob([content], { type: `${type};charset=utf-8` }));
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
@@ -84,24 +133,61 @@ function downloadMarkdown(filename: string, content: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-// main.tsx marks the document when the page was opened as a standalone window
-// rather than as the fixed-size toolbar popup.
-const isWindowView = () => document.documentElement.dataset.view === "window";
+
+interface AppState {
+  workspace: Workspace;
+  /** Whether this copy has changes it hasn't written to storage yet. */
+  unsaved: boolean;
+}
+
+type AppAction = WorkspaceAction | { type: "app/saved"; workspace: Workspace };
+
+// Tracks unsaved changes next to the workspace so a save can't clear a change it didn't
+// include. Merging in another copy's save keeps the flag as it was: with nothing unsaved
+// here, the merge isn't written back, so copies don't trade saves back and forth.
+function appReducer(state: AppState, action: AppAction): AppState {
+  if (action.type === "app/saved") {
+    return state.workspace === action.workspace ? { ...state, unsaved: false } : state;
+  }
+  const workspace = workspaceReducer(state.workspace, action);
+  if (workspace === state.workspace) return state;
+  return { workspace, unsaved: action.type === "workspace/merge" ? state.unsaved : true };
+}
 
 export default function App() {
-  const [workspace, dispatch] = useReducer(workspaceReducer, null, () => loadWorkspace());
+  const [{ workspace, unsaved }, dispatchApp] = useReducer(appReducer, null, () => ({
+    workspace: loadWorkspace(),
+    unsaved: false,
+  }));
+  const dispatch = useCallback((action: WorkspaceAction) => dispatchApp(action), []);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
+  const [storageUsed, setStorageUsed] = useState(() => storageUsage());
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Note | null>(null);
   const [pendingReset, setPendingReset] = useState(false);
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; edge: "before" | "after" } | null>(null);
   const [tabOverflow, setTabOverflow] = useState({ start: false, end: false });
+  const [undoToastNote, setUndoToastNote] = useState<Note | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // Re-render periodically so "Edited 5 min ago" stays current.
+  const [now, setNow] = useState(() => Date.now());
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
+  // Only read inside event handlers, so a ref avoids re-rendering on every close.
+  const closedNotesRef = useRef<ClosedNote[]>([]);
   const workspaceRef = useRef(workspace);
+  // The last workspace this copy and storage agreed on: what it last saved or received.
+  // It's the base for merging another copy's save. The raw string shows whether storage
+  // has changed since, even before the other copy's storage event arrives here.
+  const savedWorkspaceRef = useRef(workspace);
+  const [initialStoredRaw] = useState(() => readStoredWorkspace());
+  const savedRawRef = useRef(initialStoredRaw);
   workspaceRef.current = workspace;
+  const unsavedStateRef = useRef(unsaved);
+  unsavedStateRef.current = unsaved;
 
   const activeNote = useMemo(
     () => workspace.notes.find((note) => note.id === workspace.activeNoteId) ?? workspace.notes[0],
@@ -109,9 +195,26 @@ export default function App() {
   );
 
   const persist = useCallback(() => {
+    // Nothing changed here, e.g. only another copy's save was merged in.
+    if (!unsavedStateRef.current) return;
+    let saving = workspaceRef.current;
     try {
-      saveWorkspace(workspaceRef.current);
+      // Another copy saved and its storage event hasn't been handled here yet. Merge its
+      // save in first rather than overwrite it.
+      const stored = readStoredWorkspace();
+      if (stored !== null && stored !== savedRawRef.current) {
+        const incoming = loadWorkspace();
+        const base = savedWorkspaceRef.current;
+        saving = mergeWorkspaces(base, saving, incoming);
+        savedWorkspaceRef.current = incoming;
+        savedRawRef.current = stored;
+        dispatchApp({ type: "workspace/merge", base, incoming });
+      }
+      savedRawRef.current = saveWorkspace(saving);
+      savedWorkspaceRef.current = saving;
+      dispatchApp({ type: "app/saved", workspace: saving });
       setSaveStatus("saved");
+      setStorageUsed(storageUsage());
     } catch {
       setSaveStatus("error");
     }
@@ -136,26 +239,49 @@ export default function App() {
     };
   }, [persist]);
 
-  // The popup and a standalone window can be open at once. Pick up changes the other
-  // one saved so neither overwrites the other with a stale copy.
+  // The popup, a standalone window and the side panel can be open at once. Pick up what
+  // another one saved with a three-way merge, so changes made here but not yet saved
+  // survive, and each copy stays on its own active note.
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
       if (event.key !== WORKSPACE_KEY || event.newValue === null) return;
-      dispatch({ type: "workspace/replace", workspace: loadWorkspace() });
+      const stored = readStoredWorkspace();
+      // Already merged, e.g. by a save here that found it first.
+      if (stored === null || stored === savedRawRef.current) return;
+      const incoming = loadWorkspace();
+      const base = savedWorkspaceRef.current;
+      savedWorkspaceRef.current = incoming;
+      savedRawRef.current = stored;
+      // Render now, so a save that runs next (debounce, or the popup closing) starts from
+      // the merged state rather than the one before it.
+      flushSync(() => dispatchApp({ type: "workspace/merge", base, incoming }));
+      setStorageUsed(storageUsage());
     };
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
+  const view = viewMode();
+  const windowIdRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (view !== "popup") return;
+    currentWindowId().then((id) => {
+      windowIdRef.current = id;
+    }, () => {});
+  }, [view]);
+
   const openInWindow = useCallback(async () => {
     persist();
-    await browser.windows.create({
-      url: browser.runtime.getURL("/popup.html?view=window"),
-      type: "popup",
-      width: 1000,
-      height: 760,
-    });
+    await openStandaloneWindow();
     window.close();
+  }, [persist]);
+
+  const openInSidePanel = useCallback(() => {
+    persist();
+    openSidePanel(windowIdRef.current).then(
+      () => window.close(),
+      () => setNotice("Couldn’t open the side panel. Try again from the browser’s side panel menu."),
+    );
   }, [persist]);
 
   useEffect(() => {
@@ -164,16 +290,64 @@ export default function App() {
 
   const addNote = useCallback(() => dispatch({ type: "note/add" }), []);
 
-  const anyDialogOpen = settingsOpen || pendingDelete !== null || pendingReset;
+  const deleteNote = useCallback((note: Note) => {
+    const index = workspaceRef.current.notes.findIndex((candidate) => candidate.id === note.id);
+    if (index < 0) return;
+    dispatch({ type: "note/delete", id: note.id });
+    closedNotesRef.current = [{ note, index }, ...closedNotesRef.current].slice(0, CLOSED_NOTES_LIMIT);
+    setUndoToastNote(note);
+  }, []);
+
+  const reopenClosedNote = useCallback(() => {
+    const [latest, ...rest] = closedNotesRef.current;
+    closedNotesRef.current = rest;
+    if (latest) dispatch({ type: "note/restore", note: latest.note, index: latest.index });
+    setUndoToastNote(null);
+  }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), UNDO_TOAST_MS);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
+  useEffect(() => {
+    if (!undoToastNote) return;
+    const timeout = window.setTimeout(() => setUndoToastNote(null), UNDO_TOAST_MS);
+    return () => window.clearTimeout(timeout);
+  }, [undoToastNote]);
+
+  const anyDialogOpen = settingsOpen || switcherOpen || pendingDelete !== null || pendingReset;
+
+  // The editor remounts when the active note changes, so focus it after that render.
+  const focusEditorSoon = () => window.requestAnimationFrame(() => editorRef.current?.focus());
 
   useEffect(() => {
     // A dialog owns the keyboard while open; don't create/switch notes behind it.
     if (anyDialogOpen) return;
     const handleShortcut = (event: KeyboardEvent) => {
       const modifier = event.metaKey || event.ctrlKey;
-      if (modifier && event.key.toLowerCase() === "n") {
+      if (modifier && !event.shiftKey && event.key.toLowerCase() === "n") {
         event.preventDefault();
         addNote();
+      }
+      if (modifier && !event.shiftKey && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        setSwitcherOpen(true);
+      }
+      // Inside the editor CodeMirror handles this itself; from elsewhere, open its search.
+      if (modifier && !event.shiftKey && event.key.toLowerCase() === "f" && !event.defaultPrevented) {
+        event.preventDefault();
+        editorRef.current?.openSearch();
+      }
+      if (modifier && event.shiftKey && event.key.toLowerCase() === "t") {
+        event.preventDefault();
+        reopenClosedNote();
       }
       if (event.ctrlKey && event.key === "Tab") {
         event.preventDefault();
@@ -186,7 +360,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [addNote, anyDialogOpen, workspace.activeNoteId, workspace.notes]);
+  }, [addNote, anyDialogOpen, reopenClosedNote, workspace.activeNoteId, workspace.notes]);
 
   useEffect(() => {
     const activeTab = tabListRef.current?.querySelector<HTMLElement>("[aria-selected='true']");
@@ -222,33 +396,49 @@ export default function App() {
     return `linear-gradient(${axis}, ${stops.join(", ")})`;
   }, [tabOverflow, workspace.settings.tabLayout]);
 
+  const wordCount = useMemo(() => countWords(activeNote?.markdown ?? ""), [activeNote?.markdown]);
+
   if (!activeNote) return null;
 
   const requestDelete = (note: Note) => {
     if (workspace.settings.confirmDelete) setPendingDelete(note);
-    else dispatch({ type: "note/delete", id: note.id });
+    else deleteNote(note);
   };
 
   const exportAll = () => {
     const combined = workspace.notes
       .map((note) => `# ${note.title}\n\n${note.markdown.trim()}\n`)
       .join("\n---\n\n");
-    downloadMarkdown("TabbyNotes.md", combined);
+    downloadFile("TabbyNotes.md", combined);
   };
 
+  const backUpAll = () => {
+    const date = new Date().toISOString().slice(0, 10);
+    downloadFile(`TabbyNotes-backup-${date}.json`, serializeBackup(workspace), "application/json");
+  };
+
+  // Accepts Markdown files (one note each) and TabbyNotes .json backups (every note inside).
   const importNotes = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
-    const notes = await Promise.all(
-      files.map(async (file) =>
-        createNote({
-          title: file.name.replace(/\.md(?:own)?$/i, "") || "Imported note",
-          markdown: await file.text(),
-        }),
-      ),
-    );
-    for (const note of notes) dispatch({ type: "note/add", note });
     event.target.value = "";
+    const imported: Note[] = [];
+    const skipped: string[] = [];
+    for (const file of files) {
+      const text = await file.text();
+      if (/\.json$/i.test(file.name)) {
+        const backup = parseBackup(text);
+        if (backup) imported.push(...notesToRestore(backup, [...workspaceRef.current.notes, ...imported]));
+        else skipped.push(file.name);
+      } else {
+        imported.push(
+          createNote({ title: file.name.replace(/\.(?:md|markdown|txt)$/i, "") || "Imported note", markdown: text }),
+        );
+      }
+    }
+    for (const note of imported) dispatch({ type: "note/add", note });
     setSettingsOpen(false);
+    const added = `Imported ${imported.length} ${imported.length === 1 ? "note" : "notes"}`;
+    setNotice(skipped.length > 0 ? `${added}. Not a TabbyNotes backup: ${skipped.join(", ")}` : added);
   };
 
   const activateTabAt = (index: number) => {
@@ -270,7 +460,15 @@ export default function App() {
             {saveStatus === "saved" ? <Check size={11} /> : <span className="h-2 w-2 rounded-full bg-red-500" />}
             {saveStatus === "saved" ? "Saved" : "Save failed"}
           </p>
-          {!isWindowView() && (
+          <button className="icon-button" onClick={() => setSwitcherOpen(true)} aria-label="Go to note" title="Go to note (Ctrl/⌘ P)">
+            <FileSearch size={16} />
+          </button>
+          {view === "popup" && canOpenSidePanel() && (
+            <button className="icon-button" onClick={openInSidePanel} aria-label="Open in the side panel" title="Open in the side panel">
+              <PanelRight size={16} />
+            </button>
+          )}
+          {view === "popup" && (
             <button className="icon-button" onClick={openInWindow} aria-label="Open in a resizable window" title="Open in a resizable window">
               <Maximize2 size={16} />
             </button>
@@ -362,6 +560,15 @@ export default function App() {
                   aria-controls="note-editor"
                   tabIndex={isActive ? 0 : -1}
                   onClick={() => dispatch({ type: "note/activate", id: note.id })}
+                  onDoubleClick={() => {
+                    // Rename in place: jump to the title field with its text selected.
+                    window.requestAnimationFrame(() => {
+                      const titleInput = document.getElementById("active-note-title");
+                      if (!(titleInput instanceof HTMLInputElement)) return;
+                      titleInput.focus();
+                      titleInput.select();
+                    });
+                  }}
                   onKeyDown={(event) => {
                     const previousIndex = (noteIndex - 1 + workspace.notes.length) % workspace.notes.length;
                     const nextIndex = (noteIndex + 1) % workspace.notes.length;
@@ -397,7 +604,7 @@ export default function App() {
                       activateTabAt(workspace.notes.length - 1);
                     }
                   }}
-                  title={note.title}
+                  title={`${note.title} (double-click to rename)`}
                 >
                   <FileText className="tab-file-icon" size={13} />
                   <span>{note.title}</span>
@@ -430,7 +637,13 @@ export default function App() {
             }
             onBlur={(event) => {
               if (!event.target.value.trim()) {
-                dispatch({ type: "note/update", id: activeNote.id, changes: { title: "Untitled note" } });
+                dispatch({ type: "note/update", id: activeNote.id, changes: { autoTitle: true } });
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                editorRef.current?.focus();
               }
             }}
             aria-label="Note title"
@@ -443,7 +656,10 @@ export default function App() {
               <Icon size={15} />
             </button>
           ))}
-          <span className="ml-auto hidden items-center gap-1.5 text-[10px] font-semibold tracking-wide text-[var(--muted)] uppercase sm:flex">
+          <button className="format-button ml-auto" onClick={() => editorRef.current?.openSearch()} title="Find and replace (Ctrl/⌘ F)" aria-label="Find and replace">
+            <Search size={15} />
+          </button>
+          <span className="hidden items-center gap-1.5 text-[10px] font-semibold tracking-wide text-[var(--muted)] uppercase sm:flex">
             {workspace.settings.editorStyle === "live" ? <Sparkles size={12} /> : <Code2 size={12} />}
             {workspace.settings.editorStyle === "live" ? "Live preview" : "Markdown source"}
           </span>
@@ -458,6 +674,7 @@ export default function App() {
                 initialValue={activeNote.markdown}
                 label="Markdown note editor"
                 livePreviewEnabled={workspace.settings.editorStyle === "live"}
+                loadRemoteImages={workspace.settings.loadRemoteImages}
                 onChange={(markdown) =>
                   dispatch({ type: "note/update", id: activeNote.id, changes: { markdown } })
                 }
@@ -468,22 +685,57 @@ export default function App() {
       </section>
 
       <footer className="app-footer">
-        <span>{activeNote.markdown.length.toLocaleString()} characters</span>
+        <span title={`${activeNote.markdown.length.toLocaleString()} characters`}>
+          {wordCount.toLocaleString()} {wordCount === 1 ? "word" : "words"}
+        </span>
+        <span title={new Date(activeNote.updatedAt).toLocaleString()}>
+          Edited {formatEdited(activeNote.updatedAt, Math.max(now, activeNote.updatedAt))}
+        </span>
         <span>{workspace.notes.length} {workspace.notes.length === 1 ? "tab" : "tabs"}</span>
-        <span className="ml-auto">Ctrl+Tab to switch</span>
+        {storageUsed >= STORAGE_SHOW_AT && (
+          <span
+            className={storageUsed >= STORAGE_WARN_AT ? "storage-warning" : ""}
+            title="Browsers limit how much an extension can keep. Back up and delete old notes to free space."
+          >
+            Storage {Math.min(100, Math.round(storageUsed * 100))}% full
+          </span>
+        )}
+        <span className="footer-hint ml-auto">Ctrl+Tab to switch</span>
       </footer>
 
-      {saveStatus === "error" && (
-        <div className="save-alert" role="alert">
-          <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />
-          <span>Couldn’t save to this browser. Export your notes so you don’t lose them.</span>
-          <button className="save-alert-action" onClick={exportAll}>
-            <Download size={13} />Export all
-          </button>
-        </div>
-      )}
+      {/* Always present, so screen readers announce toasts as they're added. */}
+      <div className="toast-stack" role="status" aria-live="polite">
+        {undoToastNote && (
+          <div className="toast">
+            <span className="toast-text">Deleted “{undoToastNote.title}”</span>
+            <button className="toast-action" onClick={reopenClosedNote}>
+              <RotateCcw size={13} />Undo
+            </button>
+            <button className="toast-dismiss" onClick={() => setUndoToastNote(null)} aria-label="Dismiss">
+              <X size={12} />
+            </button>
+          </div>
+        )}
+        {notice && (
+          <div className="toast">
+            <span className="toast-text">{notice}</span>
+            <button className="toast-dismiss" onClick={() => setNotice(null)} aria-label="Dismiss">
+              <X size={12} />
+            </button>
+          </div>
+        )}
+        {saveStatus === "error" && (
+          <div className="toast toast-error" role="alert">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />
+            <span>Couldn’t save to this browser. Export your notes so you don’t lose them.</span>
+            <button className="toast-action" onClick={exportAll}>
+              <Download size={13} />Export all
+            </button>
+          </div>
+        )}
+      </div>
 
-      <input ref={importRef} className="hidden" type="file" accept=".md,.markdown,text/markdown,text/plain" multiple onChange={importNotes} />
+      <input ref={importRef} className="hidden" type="file" accept=".md,.markdown,.txt,.json,text/markdown,text/plain,application/json" multiple onChange={importNotes} />
 
       {settingsOpen && (
         <Dialog title="Workspace settings" onClose={() => setSettingsOpen(false)}>
@@ -508,6 +760,13 @@ export default function App() {
                   </button>
                 ))}
               </div>
+              <label className="toggle-row mt-3">
+                <span>
+                  Load web images automatically
+                  <span className="toggle-hint">Otherwise each image waits for a click, since loading it tells its host your IP address.</span>
+                </span>
+                <input type="checkbox" checked={workspace.settings.loadRemoteImages} onChange={(event) => dispatch({ type: "settings/update", changes: { loadRemoteImages: event.target.checked } })} />
+              </label>
             </SettingGroup>
 
             <SettingGroup title="Tab layout" description="Place tabs above the editor or in a vertical rail.">
@@ -520,15 +779,27 @@ export default function App() {
               </div>
             </SettingGroup>
 
-            <SettingGroup title="Markdown files" description="Import and export standard .md files. Nothing is uploaded.">
+            <SettingGroup title="Files and backups" description="Import .md files or a backup, and export standard .md files. A backup restores every tab as it was. Nothing is uploaded.">
               <div className="grid grid-cols-2 gap-2">
                 <button className="settings-action" onClick={() => importRef.current?.click()}><Import size={15} />Import</button>
-                <button className="settings-action" onClick={() => downloadMarkdown(`${safeFilename(activeNote.title)}.md`, activeNote.markdown)}><FileDown size={15} />Export tab</button>
-                <button className="settings-action col-span-2" onClick={exportAll}><Download size={15} />Export all tabs</button>
+                <button className="settings-action" onClick={() => downloadFile(`${safeFilename(activeNote.title)}.md`, activeNote.markdown)}><FileDown size={15} />Export tab</button>
+                <button className="settings-action" onClick={exportAll}><Download size={15} />Export all (.md)</button>
+                <button className="settings-action" onClick={backUpAll}><DatabaseBackup size={15} />Back up (.json)</button>
               </div>
             </SettingGroup>
 
-            <SettingGroup title="Safety" description="Ask before closing a tab.">
+            <SettingGroup title="Keyboard shortcuts" description="Change the shortcut that opens TabbyNotes in your browser's extension shortcut settings. In the side panel, the browser may keep Ctrl N, Ctrl Tab and Ctrl Shift T for itself; use the tab bar and the Undo button there.">
+              <dl className="shortcut-list">
+                {keyboardShortcuts.map(([action, keys]) => (
+                  <div key={action}>
+                    <dt>{action}</dt>
+                    <dd><kbd>{keys}</kbd></dd>
+                  </div>
+                ))}
+              </dl>
+            </SettingGroup>
+
+            <SettingGroup title="Safety" description="Ask before closing a tab. Closed tabs can be reopened with Ctrl/⌘ Shift T.">
               <label className="toggle-row">
                 <span>Confirm tab deletion</span>
                 <input type="checkbox" checked={workspace.settings.confirmDelete} onChange={(event) => dispatch({ type: "settings/update", changes: { confirmDelete: event.target.checked } })} />
@@ -543,6 +814,22 @@ export default function App() {
         </Dialog>
       )}
 
+      {switcherOpen && (
+        <QuickSwitcher
+          notes={workspace.notes}
+          activeNoteId={activeNote.id}
+          onSelect={(id) => {
+            dispatch({ type: "note/activate", id });
+            setSwitcherOpen(false);
+            focusEditorSoon();
+          }}
+          onClose={() => {
+            setSwitcherOpen(false);
+            focusEditorSoon();
+          }}
+        />
+      )}
+
       {pendingDelete && (
         <Dialog title="Close this tab?" onClose={() => setPendingDelete(null)}>
           <div className="p-5">
@@ -551,7 +838,7 @@ export default function App() {
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button className="ghost-button" onClick={() => setPendingDelete(null)}>Cancel</button>
-              <button className="danger-button" onClick={() => { dispatch({ type: "note/delete", id: pendingDelete.id }); setPendingDelete(null); }}><Trash2 size={15} />Delete tab</button>
+              <button className="danger-button" onClick={() => { deleteNote(pendingDelete); setPendingDelete(null); }}><Trash2 size={15} />Delete tab</button>
             </div>
           </div>
         </Dialog>

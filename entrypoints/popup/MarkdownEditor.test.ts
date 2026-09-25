@@ -1,11 +1,15 @@
 import { syntaxTree } from "@codemirror/language";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
+import { search } from "@codemirror/search";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
   markdownFormattingKeymap,
+  minimalChange,
+  pasteUrlAsLink,
+  tabbyEditingKeymap,
   tabbyHistoryKeymap,
   tabbyMarkdown,
   toggleLinePrefixCommand,
@@ -107,5 +111,79 @@ describe("Markdown editor keyboard shortcuts", () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(view.state.doc.toString()).toBe(expected);
+  });
+
+  it("indents and outdents list items with Tab and Shift+Tab", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    view = new EditorView({
+      parent,
+      doc: "- parent\n- child",
+      selection: { anchor: "- parent\n- ch".length },
+      extensions: [tabbyEditingKeymap],
+    });
+    const press = (shiftKey: boolean) => {
+      const event = new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true });
+      view?.contentDOM.dispatchEvent(event);
+      return event;
+    };
+
+    expect(press(false).defaultPrevented).toBe(true);
+    expect(view.state.doc.toString()).toBe("- parent\n  - child");
+
+    press(true);
+    expect(view.state.doc.toString()).toBe("- parent\n- child");
+  });
+
+  it("opens find and replace with Ctrl/Cmd+F", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    view = new EditorView({ parent, doc: "find me", extensions: [search(), tabbyEditingKeymap] });
+    const usesCommand = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+    const event = new KeyboardEvent("keydown", {
+      key: "f",
+      metaKey: usesCommand,
+      ctrlKey: !usesCommand,
+      bubbles: true,
+      cancelable: true,
+    });
+    view.contentDOM.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(parent.querySelector(".cm-search")).not.toBeNull();
+  });
+
+  it.each([
+    { pasted: "https://example.com/a", selection: [4, 9], expected: "See [docs!](https://example.com/a)" },
+    { pasted: "https://example.com/a", selection: [9, 9], expected: null },
+    { pasted: "not a url", selection: [4, 9], expected: null },
+  ])("turns selected text into a link when pasting $pasted", ({ pasted, selection, expected }) => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    view = new EditorView({
+      parent,
+      doc: "See docs!",
+      selection: { anchor: selection[0]!, head: selection[1]! },
+      extensions: [pasteUrlAsLink],
+    });
+    const event = new Event("paste", { bubbles: true, cancelable: true }) as ClipboardEvent;
+    Object.defineProperty(event, "clipboardData", { value: { getData: () => pasted } });
+    view.contentDOM.dispatchEvent(event);
+
+    // Otherwise CodeMirror's own paste handling applies, which never builds a link.
+    if (expected) expect(view.state.doc.toString()).toBe(expected);
+    else expect(view.state.doc.toString()).not.toContain("](");
+  });
+
+  it.each([
+    ["hello world", "hello brave world", { from: 6, to: 6, insert: "brave " }],
+    ["aaa", "aa", { from: 2, to: 3, insert: "" }],
+    ["same", "same", { from: 4, to: 4, insert: "" }],
+    ["", "new", { from: 0, to: 0, insert: "new" }],
+    ["abc", "xyz", { from: 0, to: 3, insert: "xyz" }],
+  ])("replaces only the changed span of %j", (current, next, expected) => {
+    const change = minimalChange(current, next);
+    expect(change).toEqual(expected);
+    expect(EditorState.create({ doc: current }).update({ changes: change }).state.doc.toString()).toBe(next);
   });
 });

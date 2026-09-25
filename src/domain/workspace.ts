@@ -10,6 +10,11 @@ export interface Note {
   markdown: string;
   createdAt: number;
   updatedAt: number;
+  /**
+   * Whether the title follows the note's leading heading. Unset on notes saved before
+   * this existed; see titleIsAutomatic for how those are read.
+   */
+  autoTitle?: boolean;
 }
 
 export interface WorkspaceSettings {
@@ -17,6 +22,8 @@ export interface WorkspaceSettings {
   editorStyle: EditorStyle;
   tabLayout: TabLayout;
   confirmDelete: boolean;
+  /** Load http(s) images in live preview without asking first. */
+  loadRemoteImages: boolean;
 }
 
 export interface Workspace {
@@ -28,19 +35,25 @@ export interface Workspace {
 
 export type WorkspaceAction =
   | { type: "note/add"; note?: Note }
-  | { type: "note/update"; id: string; changes: Partial<Pick<Note, "title" | "markdown">> }
+  | { type: "note/update"; id: string; changes: NoteChanges }
   | { type: "note/delete"; id: string }
+  | { type: "note/restore"; note: Note; index: number }
   | { type: "note/activate"; id: string }
   | { type: "note/reorder"; sourceId: string; targetId: string; edge?: "before" | "after" }
   | { type: "notes/replace"; notes: Note[]; activeNoteId?: string }
   | { type: "settings/update"; changes: Partial<WorkspaceSettings> }
-  | { type: "workspace/replace"; workspace: Workspace };
+  | { type: "workspace/replace"; workspace: Workspace }
+  | { type: "workspace/merge"; base: Workspace; incoming: Workspace };
+
+export type NoteChanges = Partial<Pick<Note, "title" | "markdown" | "autoTitle">>;
+
+export const DEFAULT_NOTE_TITLE = "Untitled note";
 
 export function createNote(overrides: Partial<Note> = {}): Note {
   const now = Date.now();
   return {
     id: crypto.randomUUID(),
-    title: "Untitled note",
+    title: DEFAULT_NOTE_TITLE,
     markdown: "",
     createdAt: now,
     updatedAt: now,
@@ -64,8 +77,92 @@ export function createWorkspace(): Workspace {
       editorStyle: "live",
       tabLayout: "horizontal",
       confirmDelete: true,
+      loadRemoteImages: false,
     },
   };
+}
+
+/** The text of a heading on the note's first non-blank line, without Markdown markers. */
+export function leadingHeading(markdown: string): string | null {
+  const firstLine = markdown.split("\n").find((line) => line.trim() !== "") ?? "";
+  const match = /^#{1,6}\s+(.+?)(?:\s+#+)?\s*$/.exec(firstLine);
+  const text = match?.[1]?.replace(/[*_`~]/g, "").trim().slice(0, 80);
+  return text ? text : null;
+}
+
+/**
+ * Whether a note's title follows its leading heading. Notes saved before the flag existed
+ * count as automatic when the title is the default or matches the heading.
+ */
+export function titleIsAutomatic(note: Note): boolean {
+  return note.autoTitle ?? (note.title === DEFAULT_NOTE_TITLE || note.title === leadingHeading(note.markdown));
+}
+
+function updateNote(note: Note, changes: NoteChanges): Note {
+  const next: Note = { ...note, ...changes, updatedAt: Date.now() };
+  if (changes.title !== undefined) {
+    // Typing a title takes it over, unless the change says otherwise.
+    next.autoTitle = changes.autoTitle ?? false;
+  } else if (changes.autoTitle === true || (changes.markdown !== undefined && titleIsAutomatic(note))) {
+    // Handing the title back to the heading (e.g. after clearing it) applies right away.
+    next.autoTitle = true;
+    next.title = leadingHeading(next.markdown) ?? DEFAULT_NOTE_TITLE;
+  }
+  return next;
+}
+
+function sameNote(a: Note, b: Note): boolean {
+  return a.title === b.title && a.markdown === b.markdown && a.autoTitle === b.autoTitle;
+}
+
+/**
+ * Three-way merge for when another open copy (popup, window or side panel) saves.
+ * `base` is the last workspace both copies agreed on (what this copy last saved or
+ * received), `local` is this copy's current state and `incoming` is what the other copy
+ * just saved. Whatever changed here since `base` survives: edited, added, restored and
+ * deleted notes, and changed settings. Everything else takes the incoming version. When
+ * both copies edited the same note, the later edit wins, and an edit in either copy
+ * outweighs a delete in the other. This copy keeps its own active note.
+ */
+export function mergeWorkspaces(base: Workspace, local: Workspace, incoming: Workspace): Workspace {
+  const baseById = new Map(base.notes.map((note) => [note.id, note]));
+  const localById = new Map(local.notes.map((note) => [note.id, note]));
+  const incomingIds = new Set(incoming.notes.map((note) => note.id));
+
+  const notes: Note[] = [];
+  for (const theirs of incoming.notes) {
+    const mine = localById.get(theirs.id);
+    const original = baseById.get(theirs.id);
+    if (!mine) {
+      // Missing here: new over there, or deleted here. As below, an edit made over there
+      // since the last sync outweighs the delete.
+      if (!original || !sameNote(theirs, original)) notes.push(theirs);
+      continue;
+    }
+    const changedHere = !original || !sameNote(mine, original);
+    const changedThere = !original || !sameNote(theirs, original);
+    notes.push(changedHere && (!changedThere || mine.updatedAt >= theirs.updatedAt) ? mine : theirs);
+  }
+  // Notes only here: added or restored here, or deleted over there. An edit made here
+  // since the last sync outweighs the other copy's delete.
+  local.notes.forEach((mine, index) => {
+    if (incomingIds.has(mine.id)) return;
+    const original = baseById.get(mine.id);
+    if (!original || !sameNote(mine, original)) notes.splice(Math.min(index, notes.length), 0, mine);
+  });
+  if (notes.length === 0) notes.push(createNote());
+
+  const settings = { ...incoming.settings };
+  for (const key of Object.keys(settings) as (keyof WorkspaceSettings)[]) {
+    if (local.settings[key] !== base.settings[key]) Object.assign(settings, { [key]: local.settings[key] });
+  }
+
+  const activeNoteId = notes.some((note) => note.id === local.activeNoteId)
+    ? local.activeNoteId
+    : notes.some((note) => note.id === incoming.activeNoteId)
+      ? incoming.activeNoteId
+      : (notes[0]?.id ?? "");
+  return { ...incoming, notes, settings, activeNoteId };
 }
 
 export function workspaceReducer(state: Workspace, action: WorkspaceAction): Workspace {
@@ -79,9 +176,7 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
       return {
         ...state,
         notes: state.notes.map((note) =>
-          note.id === action.id
-            ? { ...note, ...action.changes, updatedAt: Date.now() }
-            : note,
+          note.id === action.id ? updateNote(note, action.changes) : note,
         ),
       };
 
@@ -101,6 +196,17 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
           : state.activeNoteId;
 
       return { ...state, notes, activeNoteId };
+    }
+
+    case "note/restore": {
+      if (state.notes.some((note) => note.id === action.note.id)) return state;
+      // Deleting the last note leaves an empty placeholder; restoring replaces it.
+      const [only] = state.notes;
+      const onlyPlaceholder =
+        state.notes.length === 1 && only?.markdown === "" && only.title === DEFAULT_NOTE_TITLE;
+      const notes = onlyPlaceholder ? [] : [...state.notes];
+      notes.splice(Math.max(0, Math.min(action.index, notes.length)), 0, action.note);
+      return { ...state, notes, activeNoteId: action.note.id };
     }
 
     case "note/activate":
@@ -139,5 +245,49 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
 
     case "workspace/replace":
       return action.workspace;
+
+    // Merged against the latest state here, so edits not yet rendered aren't lost.
+    case "workspace/merge":
+      return mergeWorkspaces(action.base, state, action.incoming);
   }
+}
+
+export interface NoteSearchResult {
+  note: Note;
+  /** Text around the first body match, when the query matched the body rather than the title. */
+  snippet?: string;
+}
+
+const SNIPPET_RADIUS = 40;
+
+/**
+ * Finds notes whose title or body contains every word of the query (case-insensitive).
+ * Title matches rank first. An empty query lists every note, most recently edited first.
+ */
+export function searchNotes(notes: Note[], query: string): NoteSearchResult[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) {
+    return [...notes].sort((a, b) => b.updatedAt - a.updatedAt).map((note) => ({ note }));
+  }
+
+  const ranked: { result: NoteSearchResult; rank: number }[] = [];
+  for (const note of notes) {
+    const title = note.title.toLowerCase();
+    const body = note.markdown.toLowerCase();
+    if (!words.every((word) => title.includes(word) || body.includes(word))) continue;
+
+    const titleHits = words.filter((word) => title.includes(word)).length;
+    const bodyWord = words.find((word) => !title.includes(word)) ?? (titleHits === 0 ? words[0] : undefined);
+    let snippet: string | undefined;
+    if (bodyWord) {
+      const at = body.indexOf(bodyWord);
+      const start = Math.max(0, at - SNIPPET_RADIUS);
+      const end = Math.min(note.markdown.length, at + bodyWord.length + SNIPPET_RADIUS);
+      snippet = `${start > 0 ? "…" : ""}${note.markdown.slice(start, end).replace(/\s+/g, " ").trim()}${end < note.markdown.length ? "…" : ""}`;
+    }
+    const rank = (title.startsWith(words[0] ?? "") ? 2 : 0) + (titleHits === words.length ? 2 : titleHits > 0 ? 1 : 0);
+    ranked.push({ result: snippet ? { note, snippet } : { note }, rank });
+  }
+  // Array.prototype.sort is stable, so equal ranks keep tab order.
+  return ranked.sort((a, b) => b.rank - a.rank).map(({ result }) => result);
 }

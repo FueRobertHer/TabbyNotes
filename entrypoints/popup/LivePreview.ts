@@ -1,5 +1,6 @@
-import type { EditorState, Range } from "@codemirror/state";
+import { type EditorState, Facet, type Range } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
+import type { SyntaxNode } from "@lezer/common";
 import {
   Decoration,
   type DecorationSet,
@@ -75,6 +76,237 @@ class HorizontalRuleWidget extends WidgetType {
     rule.className = "cm-live-horizontal-rule";
     return rule;
   }
+}
+
+// Safe subset of inline Markdown for table cells, built with textContent (never innerHTML).
+const inlinePattern = /(`[^`]+`)|(\*\*[^*]+\*\*|__[^_]+__)|(\*[^*]+\*|_[^_]+_)|(~~[^~]+~~)/g;
+
+function renderInline(text: string, parent: HTMLElement): void {
+  let last = 0;
+  for (const match of text.matchAll(inlinePattern)) {
+    const index = match.index ?? 0;
+    if (index > last) parent.append(text.slice(last, index));
+    const [token, code, strong, emphasis] = match;
+    const element = document.createElement(
+      code ? "code" : strong ? "strong" : emphasis ? "em" : "s",
+    );
+    const markerLength = code || emphasis ? 1 : 2;
+    element.textContent = token.slice(markerLength, token.length - markerLength);
+    parent.append(element);
+    last = index + token.length;
+  }
+  if (last < text.length) parent.append(text.slice(last));
+}
+
+type ColumnAlign = "left" | "center" | "right";
+
+/** Splits a table row into trimmed cells on unescaped pipes. */
+export function tableCells(line: string): string[] {
+  const trimmed = line.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "");
+  return trimmed.split(/(?<!\\)\|/).map((cell) => cell.trim().replace(/\\\|/g, "|"));
+}
+
+class TableRowWidget extends WidgetType {
+  constructor(
+    readonly cells: string[],
+    readonly columns: string,
+    readonly aligns: ColumnAlign[],
+    readonly header: boolean,
+    readonly last: boolean,
+  ) {
+    super();
+  }
+
+  override eq(other: TableRowWidget): boolean {
+    return (
+      this.header === other.header &&
+      this.last === other.last &&
+      this.columns === other.columns &&
+      this.aligns.join() === other.aligns.join() &&
+      this.cells.join("\u0000") === other.cells.join("\u0000")
+    );
+  }
+
+  override toDOM(): HTMLElement {
+    const row = document.createElement("span");
+    row.className = [
+      "cm-live-table-row",
+      this.header ? "cm-live-table-header" : "",
+      this.last ? "cm-live-table-last" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    row.style.gridTemplateColumns = this.columns;
+    this.aligns.forEach((align, index) => {
+      const cell = document.createElement("span");
+      cell.className = "cm-live-table-cell";
+      cell.style.textAlign = align;
+      renderInline(this.cells[index] ?? "", cell);
+      row.append(cell);
+    });
+    return row;
+  }
+
+  // Let clicks through so they move the cursor into the table and reveal its source.
+  override ignoreEvent(): boolean {
+    return false;
+  }
+}
+
+function safeImageUrl(value: string): string | null {
+  if (/^data:image\/(?:png|gif|jpe?g|webp);/i.test(value)) return value;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Whether live preview fetches http(s) images without asking. Off by default for privacy. */
+export const loadRemoteImages = Facet.define<boolean, boolean>({
+  combine: (values) => values.some(Boolean),
+});
+
+// Remote images the user chose to load this session, so they stay loaded as the view redraws.
+const approvedImages = new Set<string>();
+
+class ImageWidget extends WidgetType {
+  constructor(
+    readonly src: string,
+    readonly alt: string,
+    readonly autoLoad: boolean,
+  ) {
+    super();
+  }
+
+  override eq(other: ImageWidget): boolean {
+    return this.src === other.src && this.alt === other.alt && this.autoLoad === other.autoLoad;
+  }
+
+  override toDOM(view: EditorView): HTMLElement {
+    const wrapper = document.createElement("span");
+    wrapper.className = "cm-live-image";
+    if (this.autoLoad || approvedImages.has(this.src)) this.showImage(wrapper, view);
+    else this.showPlaceholder(wrapper, view);
+    return wrapper;
+  }
+
+  // Remote images reveal the reader's IP address to their host, so ask before fetching.
+  private showPlaceholder(wrapper: HTMLElement, view: EditorView): void {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "cm-live-image-load";
+    let host = "";
+    try {
+      host = new URL(this.src).host;
+    } catch {
+      // safeImageUrl only lets valid URLs through.
+    }
+    button.textContent = `🖼 ${this.alt || "Image"} · Load from ${host}`;
+    button.title = this.src;
+    button.addEventListener("click", () => {
+      approvedImages.add(this.src);
+      wrapper.replaceChildren();
+      this.showImage(wrapper, view);
+      view.requestMeasure();
+    });
+    wrapper.append(button);
+  }
+
+  private showImage(wrapper: HTMLElement, view: EditorView): void {
+    const image = document.createElement("img");
+    image.src = this.src;
+    image.alt = this.alt;
+    image.title = this.alt;
+    image.referrerPolicy = "no-referrer";
+    // The line's height changes once the image arrives, so ask CodeMirror to re-measure.
+    image.addEventListener("load", () => view.requestMeasure());
+    image.addEventListener("error", () => {
+      wrapper.replaceChildren(this.alt ? `🖼 ${this.alt}` : "🖼 Image failed to load");
+      wrapper.classList.add("cm-live-image-broken");
+      view.requestMeasure();
+    });
+    wrapper.append(image);
+  }
+
+  // The load button handles its own clicks; anything else moves the cursor to the image.
+  override ignoreEvent(event: Event): boolean {
+    return event.target instanceof Element && event.target.closest(".cm-live-image-load") !== null;
+  }
+}
+
+function selectionTouches(view: EditorView, from: number, to: number): boolean {
+  return view.state.selection.ranges.some((range) => range.from <= to && range.to >= from);
+}
+
+/** A row's cell texts, split on the row's own pipe nodes (so a quote's ">" isn't a cell). */
+function rowCells(state: EditorState, row: SyntaxNode): string[] {
+  const pipes = row.getChildren("TableDelimiter");
+  const bounds: [number, number][] = [];
+  let start = row.from;
+  for (const pipe of pipes) {
+    bounds.push([start, pipe.from]);
+    start = pipe.to;
+  }
+  bounds.push([start, row.to]);
+  // Leading and trailing pipes leave empty edges that aren't cells.
+  if (pipes[0]?.from === row.from) bounds.shift();
+  if (pipes.at(-1)?.to === row.to) bounds.pop();
+  return bounds.map(([from, to]) => state.sliceDoc(from, to).trim().replace(/\\\|/g, "|"));
+}
+
+function decorateTable(view: EditorView, ranges: Range<Decoration>[], table: SyntaxNode): void {
+  const { state } = view;
+  const header = table.getChild("TableHeader");
+  // The |---| line is a direct child of the table; pipes inside rows are the rows' children.
+  const delimiter = table.getChild("TableDelimiter");
+  if (!header || !delimiter) return;
+  const bodyRows = table.getChildren("TableRow");
+
+  const headerCells = rowCells(state, header);
+  const aligns: ColumnAlign[] = tableCells(state.sliceDoc(delimiter.from, delimiter.to))
+    .slice(0, headerCells.length)
+    .map((spec) =>
+      spec.startsWith(":") && spec.endsWith(":") ? "center" : spec.endsWith(":") ? "right" : "left",
+    );
+  while (aligns.length < headerCells.length) aligns.push("left");
+
+  const rows = [headerCells, ...bodyRows.map((row) => rowCells(state, row))];
+  // Every row is its own widget, so share column proportions to keep them aligned.
+  const columns = headerCells
+    .map((_, index) => {
+      const longest = Math.max(...rows.map((cells) => (cells[index] ?? "").length));
+      return `${Math.min(40, Math.max(3, longest))}fr`;
+    })
+    .join(" ");
+
+  const addRow = (row: SyntaxNode, cells: string[], isHeader: boolean, isLast: boolean) => {
+    const line = state.doc.lineAt(row.from);
+    // Swallow the space after a quote's ">" too, or the full-width row wraps below it.
+    let from = row.from;
+    while (from > line.from && /\s/.test(state.sliceDoc(from - 1, from))) from -= 1;
+    ranges.push(Decoration.line({ class: "cm-live-table-line" }).range(line.from));
+    ranges.push(
+      Decoration.replace({
+        widget: new TableRowWidget(cells, columns, aligns, isHeader, isLast),
+      }).range(from, row.to),
+    );
+  };
+
+  // Inside a blockquote, the ">" markers of the table's later lines belong to the table.
+  for (const marker of table.getChildren("QuoteMark")) {
+    ranges.push(Decoration.replace({}).range(marker.from, marker.to));
+  }
+
+  addRow(header, headerCells, true, bodyRows.length === 0);
+  ranges.push(
+    Decoration.line({ class: "cm-live-table-delimiter-line" }).range(state.doc.lineAt(delimiter.from).from),
+  );
+  ranges.push(Decoration.replace({}).range(delimiter.from, delimiter.to));
+  bodyRows.forEach((row, index) =>
+    addRow(row, rows[index + 1] ?? [], false, index === bodyRows.length - 1),
+  );
 }
 
 function lineIsActive(view: EditorView, position: number): boolean {
@@ -162,6 +394,35 @@ function buildDecorations(view: EditorView): DecorationSet {
             ),
           );
           return;
+        }
+
+        if (node.name === "Table") {
+          if (selectionTouches(view, node.from, node.to)) {
+            addLineDecorations(view, ranges, node.from, node.to, "cm-live-table-source");
+            return;
+          }
+          decorateTable(view, ranges, node.node);
+          return false;
+        }
+
+        // A plugin may not replace a line break, so images written across lines stay as text.
+        const { doc } = view.state;
+        if (
+          node.name === "Image" &&
+          doc.lineAt(node.from).number === doc.lineAt(node.to).number &&
+          !selectionTouches(view, node.from, node.to)
+        ) {
+          const url = node.node.getChild("URL");
+          const src = url ? safeImageUrl(view.state.sliceDoc(url.from, url.to)) : null;
+          const altEnd = node.node.getChildren("LinkMark")[1]?.from ?? node.from;
+          if (src) {
+            const alt = view.state.sliceDoc(node.from + 2, altEnd);
+            const autoLoad = !src.startsWith("http") || view.state.facet(loadRemoteImages);
+            ranges.push(
+              Decoration.replace({ widget: new ImageWidget(src, alt, autoLoad) }).range(node.from, node.to),
+            );
+            return false;
+          }
         }
 
         if (node.name === "ListItem") {
@@ -277,7 +538,14 @@ const livePreviewDecorations = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate): void {
-      if (update.docChanged || update.selectionSet || update.viewportChanged) {
+      // Long notes are parsed in the background, so also redraw when the tree grows.
+      if (
+        update.docChanged ||
+        update.selectionSet ||
+        update.viewportChanged ||
+        syntaxTree(update.startState) !== syntaxTree(update.state) ||
+        update.startState.facet(loadRemoteImages) !== update.state.facet(loadRemoteImages)
+      ) {
         this.decorations = buildDecorations(update.view);
       }
     }

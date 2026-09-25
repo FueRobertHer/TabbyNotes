@@ -11,6 +11,12 @@ export default defineConfig({
     action: {
       default_title: "Open TabbyNotes",
     },
+    commands: {
+      _execute_action: {
+        suggested_key: { default: "Alt+Shift+N" },
+        description: "Open TabbyNotes",
+      },
+    },
     icons: {
       16: "kitty.png",
       48: "kitty.png",
