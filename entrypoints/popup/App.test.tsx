@@ -94,4 +94,17 @@ describe("App", () => {
     expect(screen.queryByRole("dialog", { name: "Go to note" })).toBeNull();
     expect(screen.getByRole("tab", { name: "Recipes" })).toHaveAttribute("aria-selected", "true");
   });
+
+  it("renames a tab after double-clicking it", async () => {
+    seed();
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.dblClick(screen.getByRole("tab", { name: "Second" }));
+    const title = screen.getByRole("textbox", { name: "Note title" });
+    await waitFor(() => expect(title).toHaveFocus());
+    await user.keyboard("Renamed{Enter}");
+
+    expect(screen.getByRole("tab", { name: "Renamed" })).toHaveAttribute("aria-selected", "true");
+  });
 });

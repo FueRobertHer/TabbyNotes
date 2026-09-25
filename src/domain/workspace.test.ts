@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { createNote, createWorkspace, searchNotes, workspaceReducer } from "./workspace";
+import {
+  createNote,
+  createWorkspace,
+  leadingHeading,
+  searchNotes,
+  workspaceReducer,
+} from "./workspace";
 
 describe("workspaceReducer", () => {
   it("creates and activates a new note", () => {
@@ -82,6 +88,31 @@ describe("workspaceReducer", () => {
     const restored = workspaceReducer(deleted, { type: "note/restore", note: onlyNote, index: 0 });
 
     expect(restored.notes).toEqual([onlyNote]);
+  });
+
+  it("titles a note from its leading heading until the user names it", () => {
+    const note = createNote();
+    let state = { ...createWorkspace(), notes: [note], activeNoteId: note.id };
+    const edit = (markdown: string) =>
+      (state = workspaceReducer(state, { type: "note/update", id: note.id, changes: { markdown } }));
+    const title = () => state.notes[0]?.title;
+
+    edit("# Shop");
+    expect(title()).toBe("Shop");
+    edit("# Shopping **list**\n\nmilk");
+    expect(title()).toBe("Shopping list");
+    edit("milk");
+    expect(title()).toBe("Shopping list");
+
+    state = workspaceReducer(state, { type: "note/update", id: note.id, changes: { title: "Errands" } });
+    edit("# Something else");
+    expect(title()).toBe("Errands");
+  });
+
+  it("reads only a heading on the first non-blank line", () => {
+    expect(leadingHeading("\n\n## Plan ##\ntext")).toBe("Plan");
+    expect(leadingHeading("intro\n# Later")).toBeNull();
+    expect(leadingHeading("#hashtag")).toBeNull();
   });
 
   it("reorders notes by stable IDs", () => {

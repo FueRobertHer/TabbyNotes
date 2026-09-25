@@ -496,6 +496,15 @@ export default function App() {
                   aria-controls="note-editor"
                   tabIndex={isActive ? 0 : -1}
                   onClick={() => dispatch({ type: "note/activate", id: note.id })}
+                  onDoubleClick={() => {
+                    // Rename in place: jump to the title field with its text selected.
+                    window.requestAnimationFrame(() => {
+                      const titleInput = document.getElementById("active-note-title");
+                      if (!(titleInput instanceof HTMLInputElement)) return;
+                      titleInput.focus();
+                      titleInput.select();
+                    });
+                  }}
                   onKeyDown={(event) => {
                     const previousIndex = (noteIndex - 1 + workspace.notes.length) % workspace.notes.length;
                     const nextIndex = (noteIndex + 1) % workspace.notes.length;
@@ -531,7 +540,7 @@ export default function App() {
                       activateTabAt(workspace.notes.length - 1);
                     }
                   }}
-                  title={note.title}
+                  title={`${note.title} (double-click to rename)`}
                 >
                   <FileText className="tab-file-icon" size={13} />
                   <span>{note.title}</span>
@@ -565,6 +574,12 @@ export default function App() {
             onBlur={(event) => {
               if (!event.target.value.trim()) {
                 dispatch({ type: "note/update", id: activeNote.id, changes: { title: DEFAULT_NOTE_TITLE } });
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                editorRef.current?.focus();
               }
             }}
             aria-label="Note title"

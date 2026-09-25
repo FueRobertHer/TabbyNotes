@@ -71,6 +71,27 @@ export function createWorkspace(): Workspace {
   };
 }
 
+/** The text of a heading on the note's first non-blank line, without Markdown markers. */
+export function leadingHeading(markdown: string): string | null {
+  const firstLine = markdown.split("\n").find((line) => line.trim() !== "") ?? "";
+  const match = /^#{1,6}\s+(.+?)(?:\s+#+)?\s*$/.exec(firstLine);
+  const text = match?.[1]?.replace(/[*_`~]/g, "").trim().slice(0, 80);
+  return text ? text : null;
+}
+
+function updateNote(note: Note, changes: Partial<Pick<Note, "title" | "markdown">>): Note {
+  const next = { ...note, ...changes, updatedAt: Date.now() };
+  // Keep the title in step with a leading heading while the title is still the default
+  // or was taken from that heading. A title the user typed is never replaced.
+  if (changes.markdown !== undefined && changes.title === undefined) {
+    const heading = leadingHeading(changes.markdown);
+    const titleFollowsHeading =
+      note.title === DEFAULT_NOTE_TITLE || note.title === leadingHeading(note.markdown);
+    if (heading && titleFollowsHeading) next.title = heading;
+  }
+  return next;
+}
+
 export function workspaceReducer(state: Workspace, action: WorkspaceAction): Workspace {
   switch (action.type) {
     case "note/add": {
@@ -82,9 +103,7 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
       return {
         ...state,
         notes: state.notes.map((note) =>
-          note.id === action.id
-            ? { ...note, ...action.changes, updatedAt: Date.now() }
-            : note,
+          note.id === action.id ? updateNote(note, action.changes) : note,
         ),
       };
 
