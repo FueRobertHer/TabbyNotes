@@ -65,6 +65,7 @@ import {
 
 import { countWords, formatEdited } from "../../src/lib/format";
 import Dialog from "./Dialog";
+import { Keys, shortcutText } from "./Keys";
 import {
   canOpenSidePanel,
   currentWindowId,
@@ -91,20 +92,21 @@ const UNDO_TOAST_MS = 6000;
 const STORAGE_SHOW_AT = 0.5;
 const STORAGE_WARN_AT = 0.85;
 
+// Browsers keep Ctrl N and Ctrl Tab for themselves, so new notes and tab switching use Alt.
 const keyboardShortcuts = [
-  ["Open TabbyNotes", "Alt Shift N"],
-  ["New note", "Ctrl/⌘ N"],
-  ["Go to note", "Ctrl/⌘ P"],
-  ["Find and replace", "Ctrl/⌘ F"],
-  ["Reopen closed tab", "Ctrl/⌘ Shift T"],
-  ["Next / previous tab", "Ctrl Tab / Ctrl Shift Tab"],
-  ["Indent / outdent", "Tab / Shift Tab"],
+  ["Open TabbyNotes", ["Alt+Shift+N"]],
+  ["New note", ["Alt+N"]],
+  ["Go to note", ["Mod+P"]],
+  ["Find and replace", ["Mod+F"]],
+  ["Reopen closed tab", ["Mod+Shift+T"]],
+  ["Next / previous tab", ["Alt+]", "Alt+["]],
+  ["Indent / outdent", ["Tab", "Shift+Tab"]],
 ] as const;
 
 const formattingActions = [
-  { label: "Bold", shortcut: "Ctrl/⌘ B", icon: Bold, run: (editor: MarkdownEditorHandle) => editor.wrapSelection("**", "**", "bold text") },
-  { label: "Italic", shortcut: "Ctrl/⌘ I", icon: Italic, run: (editor: MarkdownEditorHandle) => editor.wrapSelection("_", "_", "italic text") },
-  { label: "Strikethrough", shortcut: "Ctrl/⌘ Shift S", icon: Strikethrough, run: (editor: MarkdownEditorHandle) => editor.wrapSelection("~~", "~~", "strikethrough text") },
+  { label: "Bold", shortcut: "Mod+B", icon: Bold, run: (editor: MarkdownEditorHandle) => editor.wrapSelection("**", "**", "bold text") },
+  { label: "Italic", shortcut: "Mod+I", icon: Italic, run: (editor: MarkdownEditorHandle) => editor.wrapSelection("_", "_", "italic text") },
+  { label: "Strikethrough", shortcut: "Mod+Shift+S", icon: Strikethrough, run: (editor: MarkdownEditorHandle) => editor.wrapSelection("~~", "~~", "strikethrough text") },
   { label: "Heading", icon: Heading2, run: (editor: MarkdownEditorHandle) => editor.prefixLine("## ", "Heading") },
   { label: "Link", icon: Link, run: (editor: MarkdownEditorHandle) => editor.wrapSelection("[", "](https://)", "link text") },
   { label: "Bulleted list", icon: List, run: (editor: MarkdownEditorHandle) => editor.prefixLine("- ", "List item") },
@@ -332,7 +334,10 @@ export default function App() {
     if (anyDialogOpen) return;
     const handleShortcut = (event: KeyboardEvent) => {
       const modifier = event.metaKey || event.ctrlKey;
-      if (modifier && !event.shiftKey && event.key.toLowerCase() === "n") {
+      // Match Alt shortcuts by physical key too: on a Mac, Option changes event.key.
+      const plainAlt = event.altKey && !modifier && !event.shiftKey;
+      const altKey = (code: string, key: string) => plainAlt && (event.code === code || event.key.toLowerCase() === key);
+      if (altKey("KeyN", "n")) {
         event.preventDefault();
         addNote();
       }
@@ -349,10 +354,11 @@ export default function App() {
         event.preventDefault();
         reopenClosedNote();
       }
-      if (event.ctrlKey && event.key === "Tab") {
+      const previousTab = altKey("BracketLeft", "[");
+      if (previousTab || altKey("BracketRight", "]")) {
         event.preventDefault();
         const currentIndex = workspace.notes.findIndex((note) => note.id === workspace.activeNoteId);
-        const direction = event.shiftKey ? -1 : 1;
+        const direction = previousTab ? -1 : 1;
         const nextIndex = (currentIndex + direction + workspace.notes.length) % workspace.notes.length;
         const nextNote = workspace.notes[nextIndex];
         if (nextNote) dispatch({ type: "note/activate", id: nextNote.id });
@@ -460,7 +466,7 @@ export default function App() {
             {saveStatus === "saved" ? <Check size={11} /> : <span className="h-2 w-2 rounded-full bg-red-500" />}
             {saveStatus === "saved" ? "Saved" : "Save failed"}
           </p>
-          <button className="icon-button" onClick={() => setSwitcherOpen(true)} aria-label="Go to note" title="Go to note (Ctrl/⌘ P)">
+          <button className="icon-button" onClick={() => setSwitcherOpen(true)} aria-label="Go to note" title={`Go to note (${shortcutText("Mod+P")})`}>
             <FileSearch size={16} />
           </button>
           {view === "popup" && canOpenSidePanel() && (
@@ -652,11 +658,11 @@ export default function App() {
 
         <div className="formatting-bar" aria-label="Markdown formatting">
           {formattingActions.map(({ label, icon: Icon, run, ...action }) => (
-            <button key={label} className="format-button" onClick={() => editorRef.current && run(editorRef.current)} title={"shortcut" in action ? `${label} (${action.shortcut})` : label} aria-label={label}>
+            <button key={label} className="format-button" onClick={() => editorRef.current && run(editorRef.current)} title={"shortcut" in action ? `${label} (${shortcutText(action.shortcut)})` : label} aria-label={label}>
               <Icon size={15} />
             </button>
           ))}
-          <button className="format-button ml-auto" onClick={() => editorRef.current?.openSearch()} title="Find and replace (Ctrl/⌘ F)" aria-label="Find and replace">
+          <button className="format-button ml-auto" onClick={() => editorRef.current?.openSearch()} title={`Find and replace (${shortcutText("Mod+F")})`} aria-label="Find and replace">
             <Search size={15} />
           </button>
           <span className="hidden items-center gap-1.5 text-[10px] font-semibold tracking-wide text-[var(--muted)] uppercase sm:flex">
@@ -700,7 +706,7 @@ export default function App() {
             Storage {Math.min(100, Math.round(storageUsed * 100))}% full
           </span>
         )}
-        <span className="footer-hint ml-auto">Ctrl+Tab to switch</span>
+        <span className="footer-hint ml-auto"><Keys combos={["Alt+]"]} /> next tab</span>
       </footer>
 
       {/* Always present, so screen readers announce toasts as they're added. */}
@@ -788,18 +794,18 @@ export default function App() {
               </div>
             </SettingGroup>
 
-            <SettingGroup title="Keyboard shortcuts" description="Change the shortcut that opens TabbyNotes in your browser's extension shortcut settings. In the side panel, the browser may keep Ctrl N, Ctrl Tab and Ctrl Shift T for itself; use the tab bar and the Undo button there.">
+            <SettingGroup title="Keyboard shortcuts" description="Change the shortcut that opens TabbyNotes in your browser's extension shortcut settings. In the side panel, the browser may keep the reopen shortcut for itself; use the Undo button there.">
               <dl className="shortcut-list">
                 {keyboardShortcuts.map(([action, keys]) => (
                   <div key={action}>
                     <dt>{action}</dt>
-                    <dd><kbd>{keys}</kbd></dd>
+                    <dd><Keys combos={keys} /></dd>
                   </div>
                 ))}
               </dl>
             </SettingGroup>
 
-            <SettingGroup title="Safety" description="Ask before closing a tab. Closed tabs can be reopened with Ctrl/⌘ Shift T.">
+            <SettingGroup title="Safety" description={<>Ask before closing a tab. Closed tabs can be reopened with <Keys combos={["Mod+Shift+T"]} />.</>}>
               <label className="toggle-row">
                 <span>Confirm tab deletion</span>
                 <input type="checkbox" checked={workspace.settings.confirmDelete} onChange={(event) => dispatch({ type: "settings/update", changes: { confirmDelete: event.target.checked } })} />
@@ -859,7 +865,7 @@ export default function App() {
   );
 }
 
-function SettingGroup({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+function SettingGroup({ title, description, children }: { title: string; description: ReactNode; children: ReactNode }) {
   return (
     <section>
       <h3 className="text-sm font-bold text-[var(--ink)]">{title}</h3>

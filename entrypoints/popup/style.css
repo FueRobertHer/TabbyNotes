@@ -825,15 +825,37 @@ input:focus-visible {
   margin: 0;
 }
 
-.shortcut-list kbd {
-  background: var(--surface-muted);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-xs);
+.keys,
+.keys-combo {
+  align-items: center;
+  display: inline-flex;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.keys {
+  gap: 4px;
+  vertical-align: middle;
+}
+
+.keys-or {
   color: var(--muted);
+  margin-right: 1px;
+}
+
+.keys kbd {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-xs);
+  color: var(--ink);
   font-family: inherit;
   font-size: 10px;
   font-weight: 700;
-  padding: 1px 6px;
+  line-height: 1.4;
+  min-width: 18px;
+  padding: 0 5px;
+  text-align: center;
 }
 
 .toggle-row {
