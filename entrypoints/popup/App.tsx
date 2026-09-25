@@ -768,8 +768,8 @@ export default function App() {
               </div>
               <label className="toggle-row mt-3">
                 <span>
-                  Load web images automatically
-                  <span className="toggle-hint">Otherwise each image stays a link until you click its image icon, since loading it tells its host your IP address. The icon also hides an image again.</span>
+                  Load web media automatically
+                  <span className="toggle-hint">Otherwise embedded images, video and audio stay a link until you click their icon, since loading them tells their host your IP address. The icon also hides them again. Plain links to media files always wait for a click.</span>
                 </span>
                 <input type="checkbox" checked={workspace.settings.loadRemoteImages} onChange={(event) => dispatch({ type: "settings/update", changes: { loadRemoteImages: event.target.checked } })} />
               </label>

@@ -1179,27 +1179,39 @@ input:focus-visible {
   font-size: 0.92em;
 }
 
-.cm-live-image {
+.cm-live-media {
   display: inline-block;
   max-width: 100%;
   position: relative;
   vertical-align: bottom;
 }
 
-/* Above its Markdown while that is being edited, on a row of its own. */
-.cm-live-image-editing {
+/* On a row of its own: above its Markdown while that is edited, or below a line linking to it. */
+.cm-live-media-block {
   display: block;
   width: fit-content;
 }
 
-.cm-live-image img {
+/* CodeMirror ends a line that ends in a widget with a <br>, which would add an empty row below. */
+.cm-live-media-block + br {
+  display: none;
+}
+
+.cm-live-media img,
+.cm-live-media video {
   border-radius: var(--radius-sm);
   display: block;
   max-height: 360px;
   max-width: 100%;
 }
 
-.cm-live-image-link {
+.cm-live-media audio {
+  display: block;
+  max-width: 100%;
+  width: 320px;
+}
+
+.cm-live-media-link {
   align-items: center;
   background: var(--surface-muted);
   border: 1px dashed var(--line);
@@ -1213,13 +1225,13 @@ input:focus-visible {
   vertical-align: bottom;
 }
 
-.cm-live-image-label {
+.cm-live-media-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.cm-live-image-toggle {
+.cm-live-media-toggle {
   align-items: center;
   background: transparent;
   border: 0;
@@ -1234,17 +1246,26 @@ input:focus-visible {
   width: 22px;
 }
 
-.cm-live-image-toggle svg {
+.cm-live-media-toggle svg {
   height: 14px;
   width: 14px;
 }
 
-.cm-live-image-toggle:hover {
-  background: var(--surface);
+.cm-live-media-toggle:hover {
+  background: var(--surface-muted);
 }
 
-/* On a loaded image the toggle sits in the corner and appears on hover. */
-.cm-live-image-shown .cm-live-image-toggle {
+/* The show/hide icon right after a link to a media file. */
+.cm-live-media-after {
+  margin-left: 2px;
+}
+
+.cm-live-media-after .cm-live-media-toggle {
+  vertical-align: middle;
+}
+
+/* On loaded images and videos the toggle sits in the corner and appears on hover. */
+.cm-live-media-shown .cm-live-media-toggle {
   background: var(--surface);
   border: 1px solid var(--line);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
@@ -1253,14 +1274,30 @@ input:focus-visible {
   position: absolute;
   top: 6px;
   transition: opacity 120ms ease;
+  z-index: 1;
 }
 
-.cm-live-image-shown:hover .cm-live-image-toggle,
-.cm-live-image-shown .cm-live-image-toggle:focus-visible {
+.cm-live-media-shown:hover .cm-live-media-toggle,
+.cm-live-media-shown .cm-live-media-toggle:focus-visible {
   opacity: 1;
 }
 
-.cm-live-image-broken {
+/* An audio player is a thin bar whose play button is in that corner, so the toggle goes beside it. */
+.cm-live-media-shown:has(audio) {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.cm-live-media-shown:has(audio) .cm-live-media-toggle,
+.cm-live-media-broken .cm-live-media-toggle {
+  border: 0;
+  box-shadow: none;
+  opacity: 1;
+  position: static;
+}
+
+.cm-live-media-broken {
   background: var(--surface-muted);
   border: 1px dashed var(--line);
   border-radius: var(--radius-sm);
@@ -1269,11 +1306,7 @@ input:focus-visible {
   padding: 1px 8px 1px 2px;
 }
 
-/* A broken image has nothing to hover, so its toggle stays in the text. */
-.cm-live-image-broken .cm-live-image-toggle {
-  border: 0;
-  opacity: 1;
-  position: static;
+.cm-live-media-broken .cm-live-media-toggle {
   vertical-align: middle;
 }
 
