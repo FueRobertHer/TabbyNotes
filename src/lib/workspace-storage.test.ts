@@ -84,6 +84,7 @@ describe("workspace storage", () => {
       editorStyle: "live",
       tabLayout: "horizontal",
       confirmDelete: false,
+      loadRemoteImages: false,
     });
   });
 
@@ -138,5 +139,24 @@ describe("workspace storage", () => {
     expect(storageUsage()).toBe(0);
     localStorage.setItem("k", "x".repeat(STORAGE_QUOTA_CHARS / 2 - 1));
     expect(storageUsage()).toBe(0.5);
+  });
+
+  it("gives repeated note IDs in a backup new ones", () => {
+    const note = createNote({ title: "Twin" });
+    const backup = serializeBackup({ ...createWorkspace(), notes: [note, { ...note, title: "Other twin" }] });
+
+    const notes = parseBackup(backup) ?? [];
+
+    expect(notes.map((n) => n.title)).toEqual(["Twin", "Other twin"]);
+    expect(new Set(notes.map((n) => n.id)).size).toBe(2);
+    expect(notes[0]?.id).toBe(note.id);
+  });
+
+  it("keeps the auto-title flag through a save", () => {
+    const workspace = createWorkspace();
+    const notes = [createNote({ autoTitle: false }), createNote()];
+    saveWorkspace({ ...workspace, notes, activeNoteId: notes[0]!.id });
+
+    expect(loadWorkspace().notes.map((n) => n.autoTitle)).toEqual([false, undefined]);
   });
 });

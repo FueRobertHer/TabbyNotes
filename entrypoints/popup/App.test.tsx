@@ -61,7 +61,7 @@ describe("App", () => {
       version: 2,
       notes: backupNotes,
       activeNoteId: first!.id,
-      settings: { theme: "light", editorStyle: "live", tabLayout: "horizontal", confirmDelete: true },
+      settings: { theme: "light", editorStyle: "live", tabLayout: "horizontal", confirmDelete: true, loadRemoteImages: false },
     });
     const input = container.querySelector<HTMLInputElement>("input[type='file']")!;
     await user.upload(input, [
@@ -123,5 +123,51 @@ describe("App", () => {
     });
 
     expect(screen.getByRole("tab", { name: saved[1]!.title })).toBeInTheDocument();
+  });
+
+  it("keeps unsaved typing when another window saves at the same moment", async () => {
+    const [first, second] = seed();
+    const user = userEvent.setup();
+    render(<App />);
+
+    // Rename the open note here; the save is still debounced when the other window writes.
+    const title = screen.getByRole("textbox", { name: "Note title" });
+    await user.clear(title);
+    await user.type(title, "Typed here");
+    seed([first!, { ...second!, title: "Renamed there", updatedAt: Date.now() + 1 }]);
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent("storage", { key: WORKSPACE_KEY, newValue: window.localStorage.getItem(WORKSPACE_KEY) }),
+      );
+    });
+
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Typed here", "Renamed there"]);
+    await waitFor(() =>
+      expect(JSON.parse(window.localStorage.getItem(WORKSPACE_KEY)!).notes.map((n: { title: string }) => n.title)).toEqual([
+        "Typed here",
+        "Renamed there",
+      ]),
+    );
+  });
+
+  it("stays on its own tab and doesn't write back another window's save", async () => {
+    const [first, second] = seed();
+    render(<App />);
+
+    const theirs = JSON.stringify({
+      version: 2,
+      notes: [first, { ...second!, title: "Renamed there" }],
+      activeNoteId: second!.id,
+      settings: { theme: "light", editorStyle: "live", tabLayout: "horizontal", confirmDelete: false, loadRemoteImages: false },
+    });
+    window.localStorage.setItem(WORKSPACE_KEY, theirs);
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: WORKSPACE_KEY, newValue: theirs }));
+    });
+
+    expect(screen.getByRole("tab", { name: "First" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Renamed there" })).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(window.localStorage.getItem(WORKSPACE_KEY)).toBe(theirs);
   });
 });

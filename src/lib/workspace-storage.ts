@@ -56,7 +56,7 @@ function isTabLayout(value: unknown): value is TabLayout {
 
 function parseNote(value: unknown): Note | null {
   if (!isRecord(value)) return null;
-  const { id, title, markdown, createdAt, updatedAt } = value;
+  const { id, title, markdown, createdAt, updatedAt, autoTitle } = value;
   if (
     typeof id !== "string" ||
     typeof title !== "string" ||
@@ -66,7 +66,9 @@ function parseNote(value: unknown): Note | null {
   ) {
     return null;
   }
-  return { id, title, markdown, createdAt, updatedAt };
+  const note: Note = { id, title, markdown, createdAt, updatedAt };
+  if (typeof autoTitle === "boolean") note.autoTitle = autoTitle;
+  return note;
 }
 
 function parseWorkspace(value: unknown): Workspace | null {
@@ -81,7 +83,15 @@ function parseWorkspace(value: unknown): Workspace | null {
 
   const notes = value.notes.map(parseNote);
   if (notes.some((note) => note === null)) return null;
-  const validNotes = notes.filter((note): note is Note => note !== null);
+  // A hand-edited file could repeat an ID, which would make two tabs act as one.
+  const seenIds = new Set<string>();
+  const validNotes = notes
+    .filter((note): note is Note => note !== null)
+    .map((note) => {
+      const unique = seenIds.has(note.id) ? { ...note, id: crypto.randomUUID() } : note;
+      seenIds.add(unique.id);
+      return unique;
+    });
   if (validNotes.length === 0) return null;
 
   const activeNoteId =
@@ -106,6 +116,7 @@ function parseWorkspace(value: unknown): Workspace | null {
         typeof value.settings.confirmDelete === "boolean"
           ? value.settings.confirmDelete
           : true,
+      loadRemoteImages: value.settings.loadRemoteImages === true,
     },
   };
 }
@@ -149,6 +160,7 @@ function migrateLegacy(raw: string): Workspace | null {
       tabLayout: "horizontal",
       confirmDelete:
         typeof legacy.confirmDelete === "boolean" ? legacy.confirmDelete : true,
+      loadRemoteImages: false,
     },
   };
 }

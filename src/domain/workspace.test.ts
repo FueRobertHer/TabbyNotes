@@ -4,6 +4,7 @@ import {
   createNote,
   createWorkspace,
   leadingHeading,
+  mergeWorkspaces,
   searchNotes,
   workspaceReducer,
 } from "./workspace";
@@ -101,12 +102,39 @@ describe("workspaceReducer", () => {
     expect(title()).toBe("Shop");
     edit("# Shopping **list**\n\nmilk");
     expect(title()).toBe("Shopping list");
-    edit("milk");
-    expect(title()).toBe("Shopping list");
+    // Clearing the note and writing a new heading keeps following it.
+    edit("");
+    expect(title()).toBe("Untitled note");
+    edit("# G");
+    edit("# Groceries");
+    expect(title()).toBe("Groceries");
 
-    state = workspaceReducer(state, { type: "note/update", id: note.id, changes: { title: "Errands" } });
+    // A typed title sticks, even one that happens to match the heading.
+    state = workspaceReducer(state, { type: "note/update", id: note.id, changes: { title: "Groceries" } });
     edit("# Something else");
-    expect(title()).toBe("Errands");
+    expect(title()).toBe("Groceries");
+
+    // Resetting to the default hands the title back to the heading.
+    state = workspaceReducer(state, {
+      type: "note/update",
+      id: note.id,
+      changes: { title: "Untitled note", autoTitle: true },
+    });
+    edit("# Back to auto");
+    expect(title()).toBe("Back to auto");
+  });
+
+  it("treats notes saved before the auto-title flag by their title", () => {
+    const named = createNote({ title: "Mine", markdown: "# Heading" });
+    const welcome = createNote({ title: "Welcome", markdown: "# Welcome" });
+    const state = { ...createWorkspace(), notes: [named, welcome], activeNoteId: named.id };
+    const edit = (id: string) =>
+      workspaceReducer(state, { type: "note/update", id, changes: { markdown: "# Changed" } }).notes.find(
+        (note) => note.id === id,
+      )?.title;
+
+    expect(edit(named.id)).toBe("Mine");
+    expect(edit(welcome.id)).toBe("Changed");
   });
 
   it("reads only a heading on the first non-blank line", () => {
@@ -214,5 +242,48 @@ describe("searchNotes", () => {
   it("requires every word to match the title or body", () => {
     expect(searchNotes(notes, "bread flour").map(({ note }) => note.title)).toEqual(["Recipes"]);
     expect(searchNotes(notes, "bread tent")).toEqual([]);
+  });
+});
+
+describe("mergeWorkspaces", () => {
+  const lastSavedAt = 100;
+  const note = (id: string, markdown: string, updatedAt: number) =>
+    createNote({ id, title: id, markdown, createdAt: 1, updatedAt });
+
+  it("keeps this window's unsaved edits and notes while taking the other window's changes", () => {
+    const base = createWorkspace();
+    const local = {
+      ...base,
+      activeNoteId: "a",
+      notes: [note("a", "typed here", 150), note("b", "old", 50), note("new", "created here", 160)],
+    };
+    const incoming = {
+      ...base,
+      activeNoteId: "b",
+      settings: { ...base.settings, theme: "dark" as const },
+      notes: [note("a", "older copy", 120), note("b", "edited there", 140), note("c", "made there", 130)],
+    };
+
+    const merged = mergeWorkspaces(local, incoming, lastSavedAt);
+
+    expect(merged.notes.map((n) => n.markdown)).toEqual([
+      "typed here",
+      "edited there",
+      "made there",
+      "created here",
+    ]);
+    expect(merged.activeNoteId).toBe("a");
+    expect(merged.settings.theme).toBe("dark");
+  });
+
+  it("lets deletions and newer edits from the other window win over saved local notes", () => {
+    const base = createWorkspace();
+    const local = { ...base, activeNoteId: "gone", notes: [note("gone", "saved", 90), note("a", "mine", 150)] };
+    const incoming = { ...base, activeNoteId: "a", notes: [note("a", "theirs, newer", 170)] };
+
+    const merged = mergeWorkspaces(local, incoming, lastSavedAt);
+
+    expect(merged.notes.map((n) => n.markdown)).toEqual(["theirs, newer"]);
+    expect(merged.activeNoteId).toBe("a");
   });
 });

@@ -45,6 +45,7 @@ import {
 import {
   createNote,
   DEFAULT_NOTE_TITLE,
+  mergeWorkspaces,
   workspaceReducer,
   type Note,
 } from "../../src/domain/workspace";
@@ -132,7 +133,7 @@ function downloadFile(filename: string, content: string, type = "text/markdown")
 export default function App() {
   const [workspace, dispatch] = useReducer(workspaceReducer, null, () => loadWorkspace());
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
-  const [storageUsed, setStorageUsed] = useState(0);
+  const [storageUsed, setStorageUsed] = useState(() => storageUsage());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Note | null>(null);
@@ -150,6 +151,10 @@ export default function App() {
   // Only read inside event handlers, so a ref avoids re-rendering on every close.
   const closedNotesRef = useRef<ClosedNote[]>([]);
   const workspaceRef = useRef(workspace);
+  // What storage holds, as far as this window knows, and when this window last wrote it.
+  // Comparing against it tells whether there are unsaved local edits.
+  const savedWorkspaceRef = useRef(workspace);
+  const lastSavedAtRef = useRef(Date.now());
   workspaceRef.current = workspace;
 
   const activeNote = useMemo(
@@ -158,8 +163,12 @@ export default function App() {
   );
 
   const persist = useCallback(() => {
+    // Nothing new to write, e.g. after picking up another window's save.
+    if (workspaceRef.current === savedWorkspaceRef.current) return;
     try {
       saveWorkspace(workspaceRef.current);
+      savedWorkspaceRef.current = workspaceRef.current;
+      lastSavedAtRef.current = Date.now();
       setSaveStatus("saved");
       setStorageUsed(storageUsage());
     } catch {
@@ -186,12 +195,21 @@ export default function App() {
     };
   }, [persist]);
 
-  // The popup and a standalone window can be open at once. Pick up changes the other
-  // one saved so neither overwrites the other with a stale copy.
+  // The popup, a standalone window and the side panel can be open at once. Pick up what
+  // another one saved. Edits made here but not yet saved are merged in rather than lost,
+  // and each copy stays on its own active note.
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
       if (event.key !== WORKSPACE_KEY || event.newValue === null) return;
-      dispatch({ type: "workspace/replace", workspace: loadWorkspace() });
+      const incoming = loadWorkspace();
+      const local = workspaceRef.current;
+      const hasUnsavedEdits = local !== savedWorkspaceRef.current;
+      const next = mergeWorkspaces(local, incoming, hasUnsavedEdits ? lastSavedAtRef.current : Infinity);
+      // Without local edits this is what storage holds (apart from the active note, which
+      // isn't worth a write), so don't save it back and set off the other window again.
+      if (!hasUnsavedEdits) savedWorkspaceRef.current = next;
+      workspaceRef.current = next;
+      dispatch({ type: "workspace/replace", workspace: next });
     };
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
@@ -573,7 +591,7 @@ export default function App() {
             }
             onBlur={(event) => {
               if (!event.target.value.trim()) {
-                dispatch({ type: "note/update", id: activeNote.id, changes: { title: DEFAULT_NOTE_TITLE } });
+                dispatch({ type: "note/update", id: activeNote.id, changes: { title: DEFAULT_NOTE_TITLE, autoTitle: true } });
               }
             }}
             onKeyDown={(event) => {

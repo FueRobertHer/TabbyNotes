@@ -10,6 +10,11 @@ export interface Note {
   markdown: string;
   createdAt: number;
   updatedAt: number;
+  /**
+   * Whether the title follows the note's leading heading. Unset on notes saved before
+   * this existed; see titleIsAutomatic for how those are read.
+   */
+  autoTitle?: boolean;
 }
 
 export interface WorkspaceSettings {
@@ -17,6 +22,8 @@ export interface WorkspaceSettings {
   editorStyle: EditorStyle;
   tabLayout: TabLayout;
   confirmDelete: boolean;
+  /** Load http(s) images in live preview without asking first. */
+  loadRemoteImages: boolean;
 }
 
 export interface Workspace {
@@ -28,7 +35,7 @@ export interface Workspace {
 
 export type WorkspaceAction =
   | { type: "note/add"; note?: Note }
-  | { type: "note/update"; id: string; changes: Partial<Pick<Note, "title" | "markdown">> }
+  | { type: "note/update"; id: string; changes: NoteChanges }
   | { type: "note/delete"; id: string }
   | { type: "note/restore"; note: Note; index: number }
   | { type: "note/activate"; id: string }
@@ -36,6 +43,8 @@ export type WorkspaceAction =
   | { type: "notes/replace"; notes: Note[]; activeNoteId?: string }
   | { type: "settings/update"; changes: Partial<WorkspaceSettings> }
   | { type: "workspace/replace"; workspace: Workspace };
+
+export type NoteChanges = Partial<Pick<Note, "title" | "markdown" | "autoTitle">>;
 
 export const DEFAULT_NOTE_TITLE = "Untitled note";
 
@@ -67,6 +76,7 @@ export function createWorkspace(): Workspace {
       editorStyle: "live",
       tabLayout: "horizontal",
       confirmDelete: true,
+      loadRemoteImages: false,
     },
   };
 }
@@ -79,17 +89,47 @@ export function leadingHeading(markdown: string): string | null {
   return text ? text : null;
 }
 
-function updateNote(note: Note, changes: Partial<Pick<Note, "title" | "markdown">>): Note {
-  const next = { ...note, ...changes, updatedAt: Date.now() };
-  // Keep the title in step with a leading heading while the title is still the default
-  // or was taken from that heading. A title the user typed is never replaced.
-  if (changes.markdown !== undefined && changes.title === undefined) {
-    const heading = leadingHeading(changes.markdown);
-    const titleFollowsHeading =
-      note.title === DEFAULT_NOTE_TITLE || note.title === leadingHeading(note.markdown);
-    if (heading && titleFollowsHeading) next.title = heading;
+/**
+ * Whether a note's title follows its leading heading. Notes saved before the flag existed
+ * count as automatic when the title is the default or matches the heading.
+ */
+export function titleIsAutomatic(note: Note): boolean {
+  return note.autoTitle ?? (note.title === DEFAULT_NOTE_TITLE || note.title === leadingHeading(note.markdown));
+}
+
+function updateNote(note: Note, changes: NoteChanges): Note {
+  const next: Note = { ...note, ...changes, updatedAt: Date.now() };
+  if (changes.title !== undefined) {
+    // Typing a title takes it over, unless the change says otherwise (e.g. resetting to default).
+    next.autoTitle = changes.autoTitle ?? false;
+  } else if (changes.markdown !== undefined && titleIsAutomatic(note)) {
+    next.autoTitle = true;
+    next.title = leadingHeading(changes.markdown) ?? DEFAULT_NOTE_TITLE;
   }
   return next;
+}
+
+/**
+ * Combines a workspace another window just saved with this window's state, for when this
+ * window has edits it hasn't saved yet (`lastSavedAt` is when it last did). Notes changed
+ * here since then keep this window's version unless the other copy is newer; notes created
+ * here since then are kept. Settings come from the other window, and this window keeps its
+ * own active note.
+ */
+export function mergeWorkspaces(local: Workspace, incoming: Workspace, lastSavedAt: number): Workspace {
+  const localById = new Map(local.notes.map((note) => [note.id, note]));
+  const incomingIds = new Set(incoming.notes.map((note) => note.id));
+  const notes = incoming.notes.map((note) => {
+    const mine = localById.get(note.id);
+    return mine && mine.updatedAt > lastSavedAt && mine.updatedAt > note.updatedAt ? mine : note;
+  });
+  for (const note of local.notes) {
+    if (!incomingIds.has(note.id) && note.updatedAt > lastSavedAt) notes.push(note);
+  }
+  const activeNoteId = notes.some((note) => note.id === local.activeNoteId)
+    ? local.activeNoteId
+    : incoming.activeNoteId;
+  return { ...incoming, notes, activeNoteId };
 }
 
 export function workspaceReducer(state: Workspace, action: WorkspaceAction): Workspace {
