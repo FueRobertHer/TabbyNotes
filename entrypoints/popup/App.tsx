@@ -763,7 +763,7 @@ export default function App() {
               <label className="toggle-row mt-3">
                 <span>
                   Load web images automatically
-                  <span className="toggle-hint">Otherwise each image waits for a click, since loading it tells its host your IP address.</span>
+                  <span className="toggle-hint">Otherwise each image stays a link until you click its image icon, since loading it tells its host your IP address. The icon also hides an image again.</span>
                 </span>
                 <input type="checkbox" checked={workspace.settings.loadRemoteImages} onChange={(event) => dispatch({ type: "settings/update", changes: { loadRemoteImages: event.target.checked } })} />
               </label>

@@ -101,15 +101,19 @@ describe("livePreview", () => {
     expect(rows[1]?.querySelectorAll<HTMLElement>(".cm-live-table-cell")[1]?.style.textAlign).toBe("right");
     expect(parent.textContent).not.toContain("---");
 
-    // Web images wait for a click unless the setting allows them.
+    // Web images stay a link until their toggle is clicked, unless the setting allows them.
     expect(parent.querySelector(".cm-live-image img")).toBeNull();
-    const load = parent.querySelector<HTMLButtonElement>(".cm-live-image-load");
-    expect(load?.textContent).toBe("🖼 A cat · Load from example.com");
-    load?.click();
+    expect(parent.querySelector(".cm-live-image-label")?.textContent).toBe("A cat · example.com");
+    parent.querySelector<HTMLButtonElement>("[aria-label='Show image from example.com']")?.click();
     const image = parent.querySelector<HTMLImageElement>(".cm-live-image img");
     expect(image?.src).toBe("https://example.com/cat.png");
     expect(image?.alt).toBe("A cat");
     expect(parent.querySelectorAll(".cm-live-image")).toHaveLength(1);
+
+    // The same toggle turns it back into a link.
+    parent.querySelector<HTMLButtonElement>("[aria-label='Hide image']")?.click();
+    expect(parent.querySelector(".cm-live-image img")).toBeNull();
+    expect(parent.querySelector(".cm-live-image-label")?.textContent).toBe("A cat · example.com");
     expect(parent.textContent).toContain("javascript:alert(1)");
 
     view.dispatch({ selection: { anchor: doc.indexOf("Milk") } });
@@ -131,6 +135,24 @@ describe("livePreview", () => {
     });
 
     expect(parent.querySelector<HTMLImageElement>(".cm-live-image img")?.src).toBe("https://example.com/dog.png");
+  });
+
+  it("hides an image that loaded automatically, and every copy of it", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    view = new EditorView({
+      parent,
+      doc: "Intro\n\n![Owl](https://example.com/owl.png)\n\n![Owl again](https://example.com/owl.png)",
+      extensions: [markdown({ base: markdownLanguage }), livePreview, loadRemoteImages.of(true)],
+    });
+
+    expect(parent.querySelectorAll(".cm-live-image img")).toHaveLength(2);
+    parent.querySelector<HTMLButtonElement>("[aria-label='Hide image']")?.click();
+    expect(parent.querySelectorAll(".cm-live-image img")).toHaveLength(0);
+    expect([...parent.querySelectorAll(".cm-live-image-label")].map((label) => label.textContent)).toEqual([
+      "Owl · example.com",
+      "Owl again · example.com",
+    ]);
   });
 
   it.each([

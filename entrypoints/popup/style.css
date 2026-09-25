@@ -1160,6 +1160,7 @@ input:focus-visible {
 .cm-live-image {
   display: inline-block;
   max-width: 100%;
+  position: relative;
   vertical-align: bottom;
 }
 
@@ -1170,24 +1171,65 @@ input:focus-visible {
   max-width: 100%;
 }
 
-.cm-live-image-load {
+.cm-live-image-link {
+  align-items: center;
   background: var(--surface-muted);
   border: 1px dashed var(--line);
   border-radius: var(--radius-sm);
   color: var(--muted);
-  cursor: pointer;
-  font: inherit;
+  display: inline-flex;
   font-size: 0.9em;
+  gap: 4px;
   max-width: 100%;
+  padding: 1px 8px 1px 2px;
+  vertical-align: bottom;
+}
+
+.cm-live-image-label {
   overflow: hidden;
-  padding: 2px 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.cm-live-image-load:hover {
-  border-color: var(--accent);
+.cm-live-image-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-xs);
   color: var(--accent-strong);
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 22px;
+  justify-content: center;
+  padding: 0;
+  width: 22px;
+}
+
+.cm-live-image-toggle svg {
+  height: 14px;
+  width: 14px;
+}
+
+.cm-live-image-toggle:hover {
+  background: var(--surface);
+}
+
+/* On a loaded image the toggle sits in the corner and appears on hover. */
+.cm-live-image-shown .cm-live-image-toggle {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  left: 6px;
+  opacity: 0;
+  position: absolute;
+  top: 6px;
+  transition: opacity 120ms ease;
+}
+
+.cm-live-image-shown:hover .cm-live-image-toggle,
+.cm-live-image-shown .cm-live-image-toggle:focus-visible {
+  opacity: 1;
 }
 
 .cm-live-image-broken {
@@ -1196,7 +1238,15 @@ input:focus-visible {
   border-radius: var(--radius-sm);
   color: var(--muted);
   font-size: 0.9em;
-  padding: 2px 8px;
+  padding: 1px 8px 1px 2px;
+}
+
+/* A broken image has nothing to hover, so its toggle stays in the text. */
+.cm-live-image-broken .cm-live-image-toggle {
+  border: 0;
+  opacity: 1;
+  position: static;
+  vertical-align: middle;
 }
 
 .cm-editor .cm-selectionBackground,
