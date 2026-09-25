@@ -58,6 +58,7 @@ import {
   WORKSPACE_KEY,
 } from "../../src/lib/workspace-storage";
 
+import { countWords, formatEdited } from "../../src/lib/format";
 import Dialog from "./Dialog";
 import {
   canOpenSidePanel,
@@ -141,6 +142,8 @@ export default function App() {
   const [tabOverflow, setTabOverflow] = useState({ start: false, end: false });
   const [undoToastNote, setUndoToastNote] = useState<Note | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Re-render periodically so "Edited 5 min ago" stays current.
+  const [now, setNow] = useState(() => Date.now());
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
@@ -239,6 +242,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
     if (!notice) return;
     const timeout = window.setTimeout(() => setNotice(null), UNDO_TOAST_MS);
     return () => window.clearTimeout(timeout);
@@ -323,6 +331,8 @@ export default function App() {
     ];
     return `linear-gradient(${axis}, ${stops.join(", ")})`;
   }, [tabOverflow, workspace.settings.tabLayout]);
+
+  const wordCount = useMemo(() => countWords(activeNote?.markdown ?? ""), [activeNote?.markdown]);
 
   if (!activeNote) return null;
 
@@ -595,7 +605,12 @@ export default function App() {
       </section>
 
       <footer className="app-footer">
-        <span>{activeNote.markdown.length.toLocaleString()} characters</span>
+        <span title={`${activeNote.markdown.length.toLocaleString()} characters`}>
+          {wordCount.toLocaleString()} {wordCount === 1 ? "word" : "words"}
+        </span>
+        <span title={new Date(activeNote.updatedAt).toLocaleString()}>
+          Edited {formatEdited(activeNote.updatedAt, Math.max(now, activeNote.updatedAt))}
+        </span>
         <span>{workspace.notes.length} {workspace.notes.length === 1 ? "tab" : "tabs"}</span>
         {storageUsed >= STORAGE_SHOW_AT && (
           <span
