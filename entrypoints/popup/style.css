@@ -594,12 +594,13 @@ input:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  left: 50%;
-  max-width: calc(100% - 24px);
+  /* Spanning the width (rather than centering from the middle) lets long toasts use all of it. */
+  left: 12px;
   pointer-events: none;
   position: absolute;
-  transform: translateX(-50%);
-  z-index: 40;
+  right: 12px;
+  /* Above dialogs, so exporting from Settings shows its result. */
+  z-index: 60;
 }
 
 .toast {
@@ -613,7 +614,7 @@ input:focus-visible {
   font-size: 11px;
   font-weight: 650;
   gap: 8px;
-  max-width: 100%;
+  max-width: min(100%, 440px);
   padding: 6px 8px 6px 12px;
   pointer-events: auto;
 }
@@ -627,6 +628,24 @@ input:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Import and export results can run long, so they wrap rather than cut off. */
+.toast-notice .toast-text {
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.toast-icon {
+  flex-shrink: 0;
+}
+
+.toast-icon-success {
+  color: #3f8f5b;
+}
+
+.toast-icon-error {
+  color: #bd4337;
 }
 
 .toast-action {

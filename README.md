@@ -26,7 +26,7 @@ TabbyNotes has no account, cloud sync, analytics, content scripts, or access to 
 - Open TabbyNotes in the browser side panel or a resizable window when the toolbar popup feels cramped. While the window is open, the toolbar button brings it forward instead of opening the popup. Open copies stay in sync; if two copies edit the same note at once, the later edit wins.
 - Ctrl/⌘ P jumps to any note, Ctrl/⌘ F finds and replaces, and Alt+Shift+N opens TabbyNotes. Settings lists every shortcut.
 - Closed tabs can be restored with Undo or Ctrl/⌘ Shift T.
-- Markdown import/export, plus JSON backups that restore every tab exactly.
+- Markdown import/export: one `.md` per note, or every note in a `.zip` that imports back. JSON backups restore every tab exactly.
 - Light and dark themes.
 
 ## Permissions

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createNote } from "../../src/domain/workspace";
 import { serializeBackup, WORKSPACE_KEY } from "../../src/lib/workspace-storage";
+import { readZip } from "../../src/lib/zip";
 import App from "./App";
 
 function seed(notes = [createNote({ title: "First" }), createNote({ title: "Second" })]) {
@@ -94,6 +95,65 @@ describe("App", () => {
     await user.upload(input, new File([backup], "backup.json", { type: "application/json" }));
     await screen.findByText("Nothing new to import: all 2 notes are already here.");
     expect(screen.getAllByRole("tab")).toHaveLength(4);
+  });
+
+  it("exports every note as its own file in a zip that imports back", async () => {
+    seed([
+      createNote({ title: "Recipes", markdown: "# Recipes\n\nBread" }),
+      createNote({ title: "Todo", markdown: "- milk" }),
+    ]);
+    const downloads: { name: string; blob: Blob }[] = [];
+    const blobs = new Map<string, Blob>();
+    // jsdom has no object URLs; stand in for them, and put back whatever was there.
+    const original = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+    URL.createObjectURL = (blob: Blob) => {
+      const url = `blob:test/${blobs.size}`;
+      blobs.set(url, blob as Blob);
+      return url;
+    };
+    URL.revokeObjectURL = () => {};
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      downloads.push({ name: this.download, blob: blobs.get(this.href)! });
+    });
+    try {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await user.click(screen.getByRole("button", { name: "Open settings" }));
+      await user.click(screen.getByRole("button", { name: /Export all/ }));
+
+      // The result shows above the Settings dialog.
+      await screen.findByText("Exported 2 notes to TabbyNotes.zip");
+      expect(screen.getByRole("dialog", { name: "Workspace settings" })).toBeInTheDocument();
+      const [download] = downloads;
+      expect(download?.name).toBe("TabbyNotes.zip");
+      const entries = await readZip(new Uint8Array(await download!.blob.arrayBuffer()));
+      const decoder = new TextDecoder();
+      expect(entries.map((entry) => [entry.name, decoder.decode(entry.data)])).toEqual([
+        ["Recipes.md", "# Recipes\n\nBread"],
+        ["Todo.md", "- milk"],
+      ]);
+
+      const input = container.querySelector<HTMLInputElement>("input[type='file']")!;
+      await user.upload(input, new File([download!.blob], "TabbyNotes.zip", { type: "application/zip" }));
+      await screen.findByText("Nothing new to import: all 2 notes are already here.");
+      expect(screen.getAllByRole("tab")).toHaveLength(2);
+    } finally {
+      URL.createObjectURL = original.create;
+      URL.revokeObjectURL = original.revoke;
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("says which files it couldn't import, as an error", async () => {
+    seed();
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    const input = container.querySelector<HTMLInputElement>("input[type='file']")!;
+    await user.upload(input, new File(["{}"], "notes.json", { type: "application/json" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "Couldn’t import notes.json: not Markdown, a zip of Markdown files, or a TabbyNotes backup.",
+    );
   });
 
   it("greets the window opened by the popup's Import button with a file prompt", async () => {
