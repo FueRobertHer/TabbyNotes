@@ -1,6 +1,7 @@
 import {
   Bold,
   Check,
+  CircleAlert,
   Code2,
   DatabaseBackup,
   Download,
@@ -45,7 +46,6 @@ import { flushSync } from "react-dom";
 
 import {
   createNote,
-  DEFAULT_NOTE_TITLE,
   mergeWorkspaces,
   workspaceReducer,
   type Note,
@@ -64,6 +64,14 @@ import {
 } from "../../src/lib/workspace-storage";
 
 import { countWords, formatEdited } from "../../src/lib/format";
+import {
+  isMarkdownFile,
+  markdownFiles,
+  markdownZipEntries,
+  noteFromMarkdownFile,
+  safeFilename,
+} from "../../src/lib/markdown-files";
+import { createZip, readZip } from "../../src/lib/zip";
 import Dialog from "./Dialog";
 import { Keys, shortcutText } from "./Keys";
 import {
@@ -117,22 +125,25 @@ const formattingActions = [
   { label: "Horizontal rule", icon: Minus, run: (editor: MarkdownEditorHandle) => editor.insert("\n\n---\n\n") },
 ] as const;
 
-function safeFilename(title: string): string {
-  const safe = title
-    .trim()
-    .replace(/[\\/:*?"<>|]+/g, "-")
-    .replace(/\s+/g, " ")
-    .slice(0, 80);
-  return safe || DEFAULT_NOTE_TITLE;
-}
-
-function downloadFile(filename: string, content: string, type = "text/markdown"): void {
-  const url = URL.createObjectURL(new Blob([content], { type: `${type};charset=utf-8` }));
+function downloadFile(filename: string, content: BlobPart, type: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type }));
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
   anchor.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  // Firefox can still be reading the file when the click returns, especially while it asks
+  // where to save it, and releasing it then fails the download.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error && error.message ? error.message : "something went wrong";
+}
+
+/** A toast that isn't tied to a note: "info" while working, then "success" or "error". */
+interface Notice {
+  text: string;
+  tone: "info" | "success" | "error";
 }
 
 
@@ -176,7 +187,7 @@ export default function App() {
   const [dropTarget, setDropTarget] = useState<{ id: string; edge: "before" | "after" } | null>(null);
   const [tabOverflow, setTabOverflow] = useState({ start: false, end: false });
   const [undoToastNote, setUndoToastNote] = useState<Note | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   // Re-render periodically so "Edited 5 min ago" stays current.
   const [now, setNow] = useState(() => Date.now());
   const editorRef = useRef<MarkdownEditorHandle>(null);
@@ -311,7 +322,7 @@ export default function App() {
     persist();
     openSidePanel(windowIdRef.current).then(
       () => window.close(),
-      () => setNotice("Couldn’t open the side panel. Try again from the browser’s side panel menu."),
+      () => setNotice({ text: "Couldn’t open the side panel. Try again from the browser’s side panel menu.", tone: "error" }),
     );
   }, [persist]);
 
@@ -343,7 +354,8 @@ export default function App() {
 
   useEffect(() => {
     if (!notice) return;
-    const timeout = window.setTimeout(() => setNotice(null), UNDO_TOAST_MS);
+    // Errors stay up longer, so there's time to read what went wrong.
+    const timeout = window.setTimeout(() => setNotice(null), notice.tone === "error" ? 2 * UNDO_TOAST_MS : UNDO_TOAST_MS);
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
@@ -440,19 +452,48 @@ export default function App() {
     else deleteNote(note);
   };
 
+  const exportTab = () => {
+    const filename = `${safeFilename(activeNote.title)}.md`;
+    try {
+      downloadFile(filename, activeNote.markdown, "text/markdown;charset=utf-8");
+      setNotice({ text: `Exported “${activeNote.title}” as ${filename}`, tone: "success" });
+    } catch (error) {
+      setNotice({ text: `Couldn’t export “${activeNote.title}”: ${errorMessage(error)}`, tone: "error" });
+    }
+  };
+
+  // One Markdown file per note, in a zip that Import reads back.
   const exportAll = () => {
-    const combined = workspace.notes
-      .map((note) => `# ${note.title}\n\n${note.markdown.trim()}\n`)
-      .join("\n---\n\n");
-    downloadFile("TabbyNotes.md", combined);
+    const encoder = new TextEncoder();
+    const notes = workspace.notes;
+    try {
+      const zip = createZip(
+        markdownFiles(notes).map(({ name, note }) => ({
+          name,
+          data: encoder.encode(note.markdown),
+          modified: new Date(note.updatedAt),
+        })),
+      );
+      downloadFile("TabbyNotes.zip", zip as Uint8Array<ArrayBuffer>, "application/zip");
+      setNotice({ text: `Exported ${notes.length} ${notes.length === 1 ? "note" : "notes"} to TabbyNotes.zip`, tone: "success" });
+    } catch (error) {
+      setNotice({ text: `Couldn’t export your notes: ${errorMessage(error)}`, tone: "error" });
+    }
   };
 
   const backUpAll = () => {
     const date = new Date().toISOString().slice(0, 10);
-    downloadFile(`TabbyNotes-backup-${date}.json`, serializeBackup(workspace), "application/json");
+    const filename = `TabbyNotes-backup-${date}.json`;
+    const count = workspace.notes.length;
+    try {
+      downloadFile(filename, serializeBackup(workspace), "application/json;charset=utf-8");
+      setNotice({ text: `Backed up ${count} ${count === 1 ? "note" : "notes"} to ${filename}`, tone: "success" });
+    } catch (error) {
+      setNotice({ text: `Couldn’t back up your notes: ${errorMessage(error)}`, tone: "error" });
+    }
   };
 
-  // Accepts Markdown files (one note each) and TabbyNotes .json backups (every note inside).
+  // Accepts Markdown files (one note each), zips of them, and TabbyNotes .json backups.
   const importNotes = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
@@ -460,31 +501,42 @@ export default function App() {
     setSettingsOpen(false);
     setImportPromptOpen(false);
     // Only large files take long enough to need saying so.
-    const reading = window.setTimeout(() => setNotice(`Reading ${files.length === 1 ? "file" : "files"}…`), 300);
+    const reading = window.setTimeout(
+      () => setNotice({ text: `Reading ${files.length === 1 ? "file" : "files"}…`, tone: "info" }),
+      300,
+    );
     const imported: Note[] = [];
     const skipped: string[] = [];
     let alreadyHere = 0;
+    // A Markdown file whose note is already here, word for word, isn't added twice.
+    const addMarkdown = (note: Note) => {
+      const existing = [...workspaceRef.current.notes, ...imported];
+      if (existing.some((other) => other.title === note.title && other.markdown === note.markdown)) alreadyHere += 1;
+      else imported.push(note);
+    };
     for (const file of files) {
-      let text: string;
       try {
-        text = await file.text();
+        if (/\.json$/i.test(file.name)) {
+          const backup = parseBackup(await file.text());
+          if (!backup) {
+            skipped.push(file.name);
+            continue;
+          }
+          const restored = notesToRestore(backup, [...workspaceRef.current.notes, ...imported]);
+          alreadyHere += backup.length - restored.length;
+          imported.push(...restored);
+        } else if (/\.zip$/i.test(file.name)) {
+          const entries = markdownZipEntries(await readZip(new Uint8Array(await file.arrayBuffer())));
+          if (entries.length === 0) skipped.push(file.name);
+          const decoder = new TextDecoder();
+          for (const entry of entries) addMarkdown(noteFromMarkdownFile(entry.name, decoder.decode(entry.data), entry.modified));
+        } else if (isMarkdownFile(file.name)) {
+          addMarkdown(noteFromMarkdownFile(file.name, await file.text()));
+        } else {
+          skipped.push(file.name);
+        }
       } catch {
         skipped.push(file.name);
-        continue;
-      }
-      if (/\.json$/i.test(file.name)) {
-        const backup = parseBackup(text);
-        if (!backup) {
-          skipped.push(file.name);
-          continue;
-        }
-        const restored = notesToRestore(backup, [...workspaceRef.current.notes, ...imported]);
-        alreadyHere += backup.length - restored.length;
-        imported.push(...restored);
-      } else {
-        imported.push(
-          createNote({ title: file.name.replace(/\.(?:md|markdown|txt)$/i, "") || "Imported note", markdown: text }),
-        );
       }
     }
     window.clearTimeout(reading);
@@ -768,8 +820,10 @@ export default function App() {
           </div>
         )}
         {notice && (
-          <div className="toast">
-            <span className="toast-text">{notice}</span>
+          <div className={`toast toast-notice ${notice.tone === "error" ? "toast-error" : ""}`} role={notice.tone === "error" ? "alert" : undefined}>
+            {notice.tone === "success" && <Check size={13} className="toast-icon toast-icon-success" aria-hidden="true" />}
+            {notice.tone === "error" && <CircleAlert size={13} className="toast-icon toast-icon-error" aria-hidden="true" />}
+            <span className="toast-text">{notice.text}</span>
             <button className="toast-dismiss" onClick={() => setNotice(null)} aria-label="Dismiss">
               <X size={12} />
             </button>
@@ -786,7 +840,7 @@ export default function App() {
         )}
       </div>
 
-      <input ref={importRef} className="hidden" type="file" accept=".md,.markdown,.txt,.json,text/markdown,text/plain,application/json" multiple onChange={importNotes} />
+      <input ref={importRef} className="hidden" type="file" accept=".md,.markdown,.txt,.json,.zip,text/markdown,text/plain,application/json,application/zip" multiple onChange={importNotes} />
 
       {settingsOpen && (
         <Dialog title="Workspace settings" onClose={() => setSettingsOpen(false)}>
@@ -830,11 +884,11 @@ export default function App() {
               </div>
             </SettingGroup>
 
-            <SettingGroup title="Files and backups" description={`Import .md files or a backup, and export standard .md files. A backup restores every tab as it was. Nothing is uploaded.${view === "popup" ? " Import opens TabbyNotes in its own window, because choosing a file would close this popup." : ""}`}>
+            <SettingGroup title="Files and backups" description={`Import .md files, a .zip of them, or a backup. Export saves standard .md files, all of them in one .zip. A backup restores every tab as it was. Nothing is uploaded.${view === "popup" ? " Import opens TabbyNotes in its own window, because choosing a file would close this popup." : ""}`}>
               <div className="grid grid-cols-2 gap-2">
                 <button className="settings-action" onClick={view === "popup" ? importInWindow : () => importRef.current?.click()}><Import size={15} />Import</button>
-                <button className="settings-action" onClick={() => downloadFile(`${safeFilename(activeNote.title)}.md`, activeNote.markdown)}><FileDown size={15} />Export tab</button>
-                <button className="settings-action" onClick={exportAll}><Download size={15} />Export all (.md)</button>
+                <button className="settings-action" onClick={exportTab}><FileDown size={15} />Export tab</button>
+                <button className="settings-action" onClick={exportAll}><Download size={15} />Export all (.zip)</button>
                 <button className="settings-action" onClick={backUpAll}><DatabaseBackup size={15} />Back up (.json)</button>
               </div>
             </SettingGroup>
@@ -923,7 +977,7 @@ export default function App() {
 }
 
 /** The toast after an import, e.g. "Imported 3 notes. 13 were already here." */
-function importSummary(imported: number, alreadyHere: number, skipped: string[]): string {
+function importSummary(imported: number, alreadyHere: number, skipped: string[]): Notice {
   const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
   const parts: string[] = [];
   if (imported > 0) {
@@ -934,8 +988,10 @@ function importSummary(imported: number, alreadyHere: number, skipped: string[])
   } else if (skipped.length === 0) {
     parts.push("Nothing to import.");
   }
-  if (skipped.length > 0) parts.push(`Couldn’t import ${skipped.join(", ")}: not Markdown or a TabbyNotes backup.`);
-  return parts.join(" ");
+  if (skipped.length > 0) {
+    parts.push(`Couldn’t import ${skipped.join(", ")}: not Markdown, a zip of Markdown files, or a TabbyNotes backup.`);
+  }
+  return { text: parts.join(" "), tone: skipped.length > 0 ? "error" : imported + alreadyHere > 0 ? "success" : "info" };
 }
 
 function SettingGroup({ title, description, children }: { title: string; description: ReactNode; children: ReactNode }) {
